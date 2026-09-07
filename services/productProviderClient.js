@@ -67,8 +67,8 @@ async function listProjects(provider, authToken, query = {}) {
     return providerRequest(provider, authToken, 'GET', '/projects', undefined, query);
 }
 
-async function getProject(provider, authToken, projectId) {
-    return providerRequest(provider, authToken, 'GET', `/projects/${encodeURIComponent(projectId)}`);
+async function getProject(provider, authToken, projectId, extraHeaders = {}) {
+    return providerRequest(provider, authToken, 'GET', `/projects/${encodeURIComponent(projectId)}`, undefined, {}, extraHeaders);
 }
 
 module.exports = {

@@ -45,15 +45,28 @@ async function resolveProjectProductId(projectId, req, authToken) {
     if (!key) return null;
     if (projectProductCache.has(key)) return projectProductCache.get(key);
 
+    const providerHeaders = (() => {
+        const headers = {};
+        const authorProjectId = String(req.headers['x-author-project-id'] || '').trim();
+        const devProjectId = String(req.headers['x-dev-project-id'] || '').trim();
+        if (authorProjectId) headers['X-Author-Project-Id'] = authorProjectId;
+        if (devProjectId) headers['X-Dev-Project-Id'] = devProjectId;
+        return headers;
+    })();
     const providers = listAuthorizedProviders(req.adminAccess || {});
     for (const provider of providers) {
         try {
-            const payload = await productProviderClient.getProject(provider, authToken, key);
+            const payload = await productProviderClient.getProject(
+                provider,
+                authToken,
+                key,
+                providerHeaders,
+            );
             const productId = payload?.productId || provider.id;
             projectProductCache.set(key, productId);
             return productId;
         } catch (err) {
-            if (err.status !== 404 && err.status !== 403) throw err;
+            if (err.status !== 404 && err.status !== 403 && err.status !== 401) throw err;
         }
     }
     return null;
@@ -126,13 +139,18 @@ async function forwardToProductApi(req, res, {
 }
 
 async function forwardAuthorShim(req, res) {
-    const productId = await resolveTargetProductId(req);
-    const apiPath = `/api/system/author${req.path}`;
-    let targetPath = apiPath;
-    if (productId === CAREER_PRODUCT_ID) {
-        targetPath = apiPath.replace('/api/system/author', '/api/author');
+    try {
+        const productId = await resolveTargetProductId(req);
+        const apiPath = `/api/system/author${req.path}`;
+        let targetPath = apiPath;
+        if (productId === CAREER_PRODUCT_ID) {
+            targetPath = apiPath.replace('/api/system/author', '/api/author');
+        }
+        return forwardToProductApi(req, res, { productId, apiPath: targetPath, method: req.method });
+    } catch (err) {
+        console.error('[systemProxy] author shim failed:', err?.message || err);
+        return res.status(502).json({ error: err.message || 'Author proxy failed' });
     }
-    return forwardToProductApi(req, res, { productId, apiPath: targetPath, method: req.method });
 }
 
 module.exports = {
