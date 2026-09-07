@@ -48,6 +48,20 @@ describe('admin-preview-url', () => {
         assert.equal(href, 'http://127.0.0.1:3014/pet/preview/book-123');
     });
 
+    test('buildAdminPreviewOpenUrl derives Pet origin from providerBaseUrl when publicBaseUrl is absent', async () => {
+        global.window.__WMB__.customerProducts = [{
+            id: 'write_my_pet_book',
+            providerBaseUrl: 'http://127.0.0.1:3014/api/admin-provider/v1',
+            customerRoute: '/pet',
+        }];
+        const { buildAdminPreviewOpenUrl } = await import('../../platform/client/admin-preview-url.js');
+        const href = buildAdminPreviewOpenUrl({
+            id: 'book-123',
+            bookType: 'pets_memoir',
+        }, { returnHref: null });
+        assert.equal(href, 'http://127.0.0.1:3014/pet/preview/book-123');
+    });
+
     test('buildAdminPreviewOpenUrl targets external Career runtime for memoir books', async () => {
         const { buildAdminPreviewOpenUrl } = await import('../../platform/client/admin-preview-url.js');
         const href = buildAdminPreviewOpenUrl({

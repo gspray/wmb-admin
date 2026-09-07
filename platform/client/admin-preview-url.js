@@ -20,6 +20,19 @@ export function authorProductRouteForBookType(bookType, bookTypeLabel = '') {
 }
 
 /**
+ * @param {object | null | undefined} row
+ * @returns {string}
+ */
+function customerOriginFromProductRow(row) {
+    if (!row || typeof row !== 'object') return '';
+    const explicit = String(row.publicBaseUrl || '').trim().replace(/\/+$/, '');
+    if (explicit) return explicit;
+    const providerBase = String(row.providerBaseUrl || '').trim().replace(/\/+$/, '');
+    if (!providerBase) return '';
+    return providerBase.replace(/\/api\/admin-provider(?:\/v\d+)?$/i, '');
+}
+
+/**
  * @param {'book'|'pet'} product
  * @returns {string}
  */
@@ -28,7 +41,7 @@ export function resolveCustomerPublicBaseUrl(product) {
     const fromBoot = typeof window !== 'undefined' ? window.__WMB__?.customerProducts : null;
     if (!Array.isArray(fromBoot)) return '';
     const row = fromBoot.find((entry) => entry?.id === productId);
-    return String(row?.publicBaseUrl || '').trim().replace(/\/+$/, '');
+    return customerOriginFromProductRow(row);
 }
 
 /**

@@ -119,7 +119,12 @@ function customerPublicBaseUrlForBookType(bookType) {
     const products = window.__WMB__?.customerProducts;
     if (!Array.isArray(products)) return '';
     const row = products.find((entry) => entry?.id === productId);
-    return String(row?.publicBaseUrl || '').trim().replace(/\/+$/, '');
+    if (!row) return '';
+    const explicit = String(row.publicBaseUrl || '').trim().replace(/\/+$/, '');
+    if (explicit) return explicit;
+    const providerBase = String(row.providerBaseUrl || '').trim().replace(/\/+$/, '');
+    if (!providerBase) return '';
+    return providerBase.replace(/\/api\/admin-provider(?:\/v\d+)?$/i, '');
 }
 
 function buildProjectPreviewUrl(project) {
