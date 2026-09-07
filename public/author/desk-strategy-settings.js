@@ -123,7 +123,11 @@ export async function launchStrategySettingsPanel(deps) {
     const footerEl = document.getElementById('my-desk-settings-footer');
     if (!contentEl || !footerEl) return;
 
-    let activeBookType = 'memoir';
+    let activeBookType = (() => {
+        const fromProject = String(state.project?.bookType || '').trim();
+        if (fromProject === 'pets_memoir' || fromProject === 'memoir') return fromProject;
+        return 'memoir';
+    })();
     let bookTypeTabs = DEFAULT_TABS.slice();
     let defaultStrategyId = 'chronological';
     let strategies = [];

@@ -39,7 +39,7 @@ async function readProviderError(res) {
     }
 }
 
-async function providerRequest(provider, authToken, method, pathSuffix, body, query = {}) {
+async function providerRequest(provider, authToken, method, pathSuffix, body, query = {}, extraHeaders = {}) {
     const url = new URL(buildProviderUrl(provider, pathSuffix));
     Object.entries(query).forEach(([key, value]) => {
         if (value === undefined || value === null || value === '') return;
@@ -48,6 +48,7 @@ async function providerRequest(provider, authToken, method, pathSuffix, body, qu
 
     const headers = providerHeaders(authToken, {
         'X-Request-Id': randomUUID(),
+        ...extraHeaders,
     });
     const init = { method: String(method || 'GET').toUpperCase(), headers };
     if (body !== undefined) {
