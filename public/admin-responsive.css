@@ -1,0 +1,147 @@
+/* Admin Book Projects — full mobile responsiveness */
+
+html:has(body.admin-page),
+html:has(body.admin-page) body {
+    min-width: 0;
+    width: 100%;
+}
+
+/* Full-viewport Admin shell; desk tool panels pin under the topbar */
+html:has(body.admin-page) {
+    height: 100%;
+    overflow: hidden;
+}
+
+body.admin-page.admin-desk-workspace-open {
+    overflow: hidden;
+}
+
+body.admin-page #admin-desk-workspace.admin-desk-workspace--active {
+    position: fixed;
+    inset: var(--header-h, 65px) 0 0 0;
+    z-index: 200;
+    width: 100vw;
+    height: calc(100dvh - var(--header-h, 65px));
+    max-height: calc(100dvh - var(--header-h, 65px));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Keep horizontal clip off the viewport roots so position:fixed topbar stays pinned */
+body.admin-page .container,
+body.admin-page .admin-desk-view,
+body.admin-page .admin-projects-view {
+    max-width: 100%;
+    overflow-x: clip;
+}
+
+body.admin-page .container {
+    width: min(100%, var(--max-width));
+    padding-inline: max(0.65rem, env(safe-area-inset-left)) max(0.65rem, env(safe-area-inset-right));
+}
+
+body.admin-page .a-topbar.admin-desk-topbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 250;
+    flex-wrap: nowrap;
+    gap: 0.65rem;
+}
+
+body.admin-page main.container.admin-projects-main {
+    padding-block: 0.65rem 1.25rem;
+}
+
+body.admin-page #new-project-form .new-project-form-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 0.75rem;
+    width: fit-content;
+    max-width: 100%;
+}
+
+body.admin-page #new-project-form #btn-create-submit,
+body.admin-page #new-project-form #btn-cancel-new {
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    flex: 0 0 auto;
+    justify-content: center;
+    white-space: nowrap;
+}
+
+body.admin-page .projects-inline-link {
+    border: none;
+    background: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    font-size: 0.78rem;
+    color: var(--color-primary, #5b53e0);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 0.12em;
+}
+
+body.admin-page .projects-inline-link:hover {
+    color: var(--color-primary-h, #4a43c9);
+}
+
+body.admin-page #btn-unhide-all {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.55rem;
+    white-space: nowrap;
+}
+
+@media (max-width: 540px) {
+    body.admin-page .logo-sub {
+        display: none;
+    }
+
+    body.admin-page .logo-version {
+        display: block;
+        margin-left: 0;
+        margin-top: 0.15rem;
+    }
+
+    /* Keep search + New on one row; shrink button label space only */
+    body.admin-page .projects-find-bar {
+        flex-wrap: nowrap;
+    }
+
+    body.admin-page .projects-search-input,
+    body.admin-page .projects-new-btn {
+        height: 2.5rem;
+    }
+
+    body.admin-page .projects-new-btn {
+        padding-inline: 0.7rem;
+        font-size: 0.9rem;
+    }
+
+    /* Keep row cards horizontal; tighten touch targets */
+    body.admin-page .bp-card {
+        flex-wrap: nowrap;
+        padding: 0.4rem 0.5rem;
+        gap: 0.3rem;
+    }
+
+    body.admin-page .bp-card-author {
+        max-width: 50%;
+    }
+
+    body.admin-page .bp-card-line1 {
+        font-size: 0.82rem;
+    }
+
+    body.admin-page .bp-card-actions .btn-tbl {
+        padding: 0.2rem 0.35rem;
+        font-size: 0.65rem;
+        min-height: 1.75rem;
+    }
+}

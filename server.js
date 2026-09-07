@@ -20,6 +20,7 @@ const BASE_PATH = (() => {
 })();
 const API = `${BASE_PATH}/api`;
 const publicDir = path.join(__dirname, 'public');
+const applicationsDir = path.join(__dirname, 'applications');
 
 assertProductionAdminTokenSecret();
 
@@ -30,26 +31,30 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", 'https://www.gstatic.com', 'https://apis.google.com'],
+            scriptSrc: ["'self'", "'unsafe-inline'", 'https://www.gstatic.com', 'https://apis.google.com', 'https://www.google.com'],
             scriptSrcAttr: ["'unsafe-inline'"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
-            imgSrc: ["'self'", 'data:', 'blob:'],
-            connectSrc: ["'self'", 'https://*.googleapis.com', 'https://*.firebaseapp.com'],
-            fontSrc: ["'self'"],
-            frameSrc: ["'self'", 'https://accounts.google.com', 'https://*.firebaseapp.com'],
+            styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+            imgSrc: ["'self'", 'data:', 'blob:', 'https://lh3.googleusercontent.com'],
+            connectSrc: ["'self'", 'https://*.googleapis.com', 'https://*.firebaseapp.com', 'https://identitytoolkit.googleapis.com'],
+            fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+            frameSrc: ["'self'", 'https://accounts.google.com', 'https://*.firebaseapp.com', 'https://www.google.com'],
             objectSrc: ["'none'"],
             upgradeInsecureRequests: NODE_ENV === 'production' ? [] : null,
         },
     },
 }));
-app.use(express.json({ limit: '2mb' }));
-app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+app.use(express.json({ limit: '40mb' }));
+app.use(express.urlencoded({ extended: true, limit: '40mb' }));
 
 const { requireAuth } = require('./middleware/auth');
 const authRouter = require('./routes/auth');
+const authProxyRouter = require('./routes/authProxy');
 const publicRouter = require('./routes/public');
 const adminRouter = require('./routes/admin');
+const projectsRouter = require('./routes/projects');
+const systemProxyRouter = require('./routes/systemProxy');
 const { resolveBuildVersion, isDevHttpEnvironment } = require('./services/buildVersion');
+const { resolveDatabaseEnvironment } = require('./services/databaseEnvironment');
 const { listProviders } = require('./services/productProviderRegistry');
 const pkg = require('./package.json');
 
@@ -64,12 +69,16 @@ const FIREBASE_CONFIG = {
 
 function buildEnvScript(req) {
     const buildVersion = resolveBuildVersion({ devHttp: isDevHttpEnvironment(req) });
-    const payload = {
+    return `<meta name="wmb-build" content="${String(buildVersion || '').replace(/"/g, '')}" />\n<script>window.__WMB__=${JSON.stringify({
         basePath: BASE_PATH,
         firebase: FIREBASE_CONFIG,
         version: pkg.version,
         buildVersion,
         env: isDevHttpEnvironment(req) ? 'development' : NODE_ENV,
+        databaseEnv: resolveDatabaseEnvironment({
+            projectId: FIREBASE_CONFIG.projectId,
+            databaseUrl: FIREBASE_CONFIG.databaseURL,
+        }),
         devLocalAuth: NODE_ENV !== 'production',
         product: 'book_platform_admin',
         productLabel: 'Book Platform Admin',
@@ -82,8 +91,7 @@ function buildEnvScript(req) {
             customerRoute: provider.customerRoute,
             providerBaseUrl: provider.providerBaseUrl,
         })),
-    };
-    return `<meta name="wmb-build" content="${String(buildVersion || '').replace(/"/g, '')}" />\n<script>window.__WMB__=${JSON.stringify(payload)};</script>`;
+    })};</script>`;
 }
 
 const FIREBASE_SCRIPTS = `
@@ -91,26 +99,60 @@ const FIREBASE_SCRIPTS = `
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script>if(window.__WMB__ && window.__WMB__.firebase && window.__WMB__.firebase.apiKey){firebase.initializeApp(window.__WMB__.firebase);}else{console.warn('Firebase not configured — auth disabled.');}</script>`;
 
-function serveAdminHtml(req, res) {
-    const htmlPath = path.join(publicDir, 'admin.html');
-    if (!fs.existsSync(htmlPath)) return res.status(404).send('Not found');
+function injectAdminHtml(htmlPath, req) {
     let html = fs.readFileSync(htmlPath, 'utf8');
     html = html
-        .replace('<!--WMB_ENV-->', buildEnvScript(req))
-        .replace('<!--WMB_FIREBASE-->', FIREBASE_SCRIPTS);
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-store');
-    res.send(html);
+        .replace('<link rel="stylesheet" href="styles.css" />', `<link rel="stylesheet" href="${BASE_PATH || ''}/styles.css" />`)
+        .replace('<link rel="stylesheet" href="admin-desk.css" />', `<link rel="stylesheet" href="${BASE_PATH || ''}/admin-desk.css" />`)
+        .replace('<link rel="stylesheet" href="admin-responsive.css" />', `<link rel="stylesheet" href="${BASE_PATH || ''}/admin-responsive.css" />`)
+        .replace('<link rel="stylesheet" href="applications/admin/admin-app.css" />', `<link rel="stylesheet" href="${BASE_PATH || ''}/applications/admin/admin-app.css" />`)
+        .replace(/src="dist\/admin-desk\.bundle\.js"/, `src="${BASE_PATH || ''}/dist/admin-desk.bundle.js?v=${encodeURIComponent(resolveBuildVersion({ devHttp: isDevHttpEnvironment(req) }))}"`)
+        .replace(/src="([^"]+)"/g, (match, src) => {
+            if (src.startsWith('http') || src.startsWith('//') || src.startsWith(`${BASE_PATH}/`)) return match;
+            return `src="${BASE_PATH}/${src.replace(/^\//, '')}"`;
+        })
+        .replace(/href="(?!https?:|data:|#|\/)([^"]+)"/g, (match, href) => `href="${BASE_PATH}/${href.replace(/^\//, '')}"`);
+    if (!html.includes('window.__WMB__')) {
+        html = html.replace('</head>', `${buildEnvScript(req)}</head>`);
+    }
+    if (!html.includes('firebase-app-compat')) {
+        html = html.replace('</body>', `${FIREBASE_SCRIPTS}</body>`);
+    }
+    return html;
+}
+
+function serveAdminHtml(htmlFile) {
+    return (req, res) => {
+        const htmlPath = path.join(publicDir, htmlFile);
+        if (!fs.existsSync(htmlPath)) return res.status(404).send('Not found');
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        res.send(injectAdminHtml(htmlPath, req));
+    };
 }
 
 app.use(`${API}/auth`, authRouter);
+app.use(`${API}/auth`, authProxyRouter);
 app.use(`${API}/public`, publicRouter);
-app.use(`${API}/admin`, requireAuth, adminRouter);
+app.use(API, requireAuth);
+app.use(`${API}/admin`, adminRouter);
+app.use(`${API}/projects`, projectsRouter);
+app.use(`${API}/system`, systemProxyRouter);
 
-app.get(['/admin', '/admin/'], serveAdminHtml);
-app.get(['/admin/login', '/admin/login.html'], serveAdminHtml);
-app.get('/', (_req, res) => res.redirect(`${BASE_PATH}/admin`.replace(/\/+/g, '/') || '/admin'));
-app.use(`${BASE_PATH}/`, express.static(publicDir, { index: false }));
+app.get(['/admin', '/admin/'], serveAdminHtml('admin.html'));
+app.get(['/admin/login', '/admin/login.html'], (req, res) => {
+    const loginPath = path.join(applicationsDir, 'admin', 'login.html');
+    if (!fs.existsSync(loginPath)) return res.status(404).send('Not found');
+    let html = fs.readFileSync(loginPath, 'utf8');
+    html = html.replace('</head>', `${buildEnvScript(req)}${FIREBASE_SCRIPTS}</head>`);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(html);
+});
+app.get('/', (_req, res) => res.redirect(`${BASE_PATH}/admin`.replace(/\/{2,}/g, '/') || '/admin'));
+
+app.use(BASE_PATH || '/', express.static(publicDir, { index: false }));
+app.use('/applications', express.static(applicationsDir, { index: false }));
 
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 

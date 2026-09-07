@@ -22,7 +22,7 @@ function walkJsFiles(dir, files = []) {
     return files;
 }
 
-describeAdminRepo('Issue #348 Phase 4 — Admin repository independence', () => {
+describeAdminRepo('Issue #348 — Admin repository independence', () => {
     test('package identity is wmb-admin', () => {
         assert.equal(pkg.name, 'wmb-admin');
     });
@@ -50,10 +50,12 @@ describeAdminRepo('Issue #348 Phase 4 — Admin repository independence', () => 
         assert.deepEqual(present, []);
     });
 
-    test('server exposes /admin bootstrap and provider orchestration routes', () => {
+    test('server exposes Admin shell and orchestration routes', () => {
         const serverSrc = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
         assert.match(serverSrc, /\/admin/);
-        assert.match(serverSrc, /app\.use\(`\$\{API\}\/admin`, requireAuth, adminRouter\)/);
+        assert.match(serverSrc, /app\.use\(`\$\{API\}\/admin`, adminRouter\)/);
+        assert.match(serverSrc, /routes\/projects/);
+        assert.match(serverSrc, /routes\/systemProxy/);
         assert.doesNotMatch(serverSrc, /routes\/author/);
         assert.doesNotMatch(serverSrc, /applications\/pet/);
     });

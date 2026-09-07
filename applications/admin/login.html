@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Book Platform Admin – Sign In</title>
+    <link rel="icon" href="/wmb-icon.png" type="image/png" sizes="32x32" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/marketing-auth.css" />
+</head>
+<body data-login-mode="admin">
+    <div class="auth-wrap">
+        <div class="auth-card">
+            <div class="auth-logo">Book Platform Admin</div>
+            <div class="auth-sub">Cross-product operations</div>
+            <div id="state-checking">
+                <div class="spinner"></div>
+                <p style="color:var(--c-muted);font-size:.9rem;">Checking sign-in...</p>
+            </div>
+            <div id="state-form" style="display:none">
+                <p class="auth-lead">Enter your admin email and we will send a one-time verification code.</p>
+                <form id="signin-form">
+                    <input class="auth-field" type="email" id="login-identifier" placeholder="Email address" autocomplete="email" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck="false" />
+                    <button type="submit" class="btn btn-primary" id="btn-send">Send Code</button>
+                </form>
+                <div id="verify-wrap" hidden>
+                    <div class="otp-code-row" aria-label="Enter 6-digit verification code" style="display:flex;gap:.35rem;justify-content:center;margin:.5rem 0;">
+                        <input class="auth-field" style="width:2.2rem;text-align:center;padding:.65rem .25rem;" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="1" data-otp-digit="0" />
+                        <input class="auth-field" style="width:2.2rem;text-align:center;padding:.65rem .25rem;" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="1" data-otp-digit="1" />
+                        <input class="auth-field" style="width:2.2rem;text-align:center;padding:.65rem .25rem;" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="1" data-otp-digit="2" />
+                        <input class="auth-field" style="width:2.2rem;text-align:center;padding:.65rem .25rem;" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="1" data-otp-digit="3" />
+                        <input class="auth-field" style="width:2.2rem;text-align:center;padding:.65rem .25rem;" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="1" data-otp-digit="4" />
+                        <input class="auth-field" style="width:2.2rem;text-align:center;padding:.65rem .25rem;" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="1" data-otp-digit="5" />
+                    </div>
+                </div>
+                <div class="auth-error" id="login-status"></div>
+                <div class="auth-error" id="login-error"></div>
+            </div>
+        </div>
+    </div>
+    <script src="/auth-login.js"></script>
+</body>
+</html>

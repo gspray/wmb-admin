@@ -40,8 +40,9 @@ router.get('/dev-entry', (req, res) => {
     }
     return res.json({
         enabled: true,
+        productId: 'book_platform_admin',
         enterPath: '/admin',
-        note: 'Standalone Admin bootstrap — use Firebase sign-in or /api/auth/admin-login locally.',
+        note: 'Standalone Admin — pick a project from Book Projects or pass ?dev_project= on /admin.',
     });
 });
 

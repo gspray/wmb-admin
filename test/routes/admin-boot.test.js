@@ -29,7 +29,7 @@ describe('Admin bootstrap routes', () => {
             assert.equal(adminPage.status, 200);
             assert.match(adminPage.body, /window\.__WMB__/);
             assert.match(adminPage.body, /book_platform_admin/);
-            assert.match(adminPage.body, /admin-bootstrap\.js/);
+            assert.match(adminPage.body, /admin-desk\.bundle\.js/);
 
             const boot = await request('/api/admin/boot', { 'X-Dev-Admin': '1' });
             assert.equal(boot.status, 200);

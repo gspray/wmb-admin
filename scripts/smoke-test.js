@@ -58,7 +58,7 @@ async function run() {
             assert: ({ response, body }) => {
                 if (!response.ok) throw new Error(`expected 2xx, got ${response.status}`);
                 if (!body.includes('window.__WMB__')) throw new Error('missing runtime config injection');
-                if (!body.includes('admin-bootstrap.js')) throw new Error('missing bootstrap script');
+                if (!body.includes('admin-desk.bundle.js')) throw new Error('missing Admin Desk bundle');
             },
         },
         {

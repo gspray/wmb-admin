@@ -1,6 +1,6 @@
 # Issue #348 — Admin independent runtime (Phase 4 bootstrap)
 
-**Status:** Phase 4 bootstrap on `gspray/wmb-admin`  
+**Status:** Phase 4–5 on `gspray/wmb-admin` (bootstrap + Admin Desk UI)  
 **Issue:** [#348](https://github.com/gspray/wmb/issues/348)  
 **Provider contract:** see `gspray/wmb` → [admin-provider-contract.md](https://github.com/gspray/wmb/blob/stage/docs/architecture/admin-provider-contract.md)
 
@@ -57,11 +57,13 @@ Implemented:
 - standalone repository with no sibling source imports
 - provider registry + HTTP client
 - `/api/admin/boot`, `/api/admin/providers`, `/api/admin/projects`
-- placeholder Admin shell proving external provider wiring
+- full Admin Desk UI (`applications/admin`, desk panels, production bundle)
+- `/api/projects` orchestration via provider APIs
+- `/api/system/*` and `/api/system/author/*` proxy shims to Pet/Career backends
+- auth/email/users proxy to Pet during migration
 
 Deferred:
 
-- Admin Desk panel migration (Phase 5)
 - proxy/hostname cutover (Phase 6)
 - Pet-hosted Admin removal (Phase 7)
 - least-privilege Firebase split (Phase 8)

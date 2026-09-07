@@ -14,7 +14,8 @@ Admin orchestrates product truth through authenticated HTTP provider contracts. 
 
 ```bash
 npm ci
-cp .env.example .env   # configure Firebase + provider URLs
+cp .env.example .env   # configure Firebase + provider/API URLs
+NODE_ENV=production npm run build:frontend
 npm run dev            # http://localhost:3018/admin
 node scripts/smoke-test.js --base-url http://127.0.0.1:3018
 ```

@@ -15,7 +15,7 @@ function resolveBuildVersion({ preferNewerFiles = false, devHttp = false } = {})
     if (devHttp || process.env.NODE_ENV !== 'production') {
         return String(Date.now());
     }
-    const marker = path.join(ROOT, 'public', 'admin-bootstrap.js');
+    const marker = path.join(ROOT, 'public', 'dist', 'admin-desk.bundle.js');
     try {
         return String(Math.floor(fs.statSync(marker).mtimeMs));
     } catch (_) {
