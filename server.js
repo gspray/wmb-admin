@@ -22,6 +22,35 @@ const API = `${BASE_PATH}/api`;
 const publicDir = path.join(__dirname, 'public');
 const applicationsDir = path.join(__dirname, 'applications');
 
+function firebaseCspHostsFromEnv() {
+    const connectHosts = new Set();
+    const frameHosts = new Set();
+    const addDbUrl = (raw) => {
+        const value = String(raw || '').trim();
+        if (!value) return;
+        try {
+            const host = new URL(value).host;
+            if (!host) return;
+            connectHosts.add(`https://${host}`);
+            connectHosts.add(`wss://${host}`);
+        } catch (_) { /* ignore bad URL */ }
+    };
+    const addAuthDomain = (raw) => {
+        const host = String(raw || '').trim().replace(/^https?:\/\//i, '').split('/')[0];
+        if (host) frameHosts.add(`https://${host}`);
+    };
+    addDbUrl(process.env.FIREBASE_DATABASE_URL);
+    addDbUrl(process.env.PROD_FIREBASE_DATABASE_URL);
+    addAuthDomain(process.env.FIREBASE_AUTH_DOMAIN);
+    addAuthDomain(process.env.PROD_FIREBASE_AUTH_DOMAIN);
+    return {
+        connectHosts: [...connectHosts],
+        frameHosts: [...frameHosts],
+    };
+}
+
+const firebaseCsp = firebaseCspHostsFromEnv();
+
 assertProductionAdminTokenSecret();
 
 const app = express();
@@ -35,9 +64,26 @@ app.use(helmet({
             scriptSrcAttr: ["'unsafe-inline'"],
             styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
             imgSrc: ["'self'", 'data:', 'blob:', 'https://lh3.googleusercontent.com'],
-            connectSrc: ["'self'", 'https://*.googleapis.com', 'https://*.firebaseapp.com', 'https://identitytoolkit.googleapis.com'],
+            connectSrc: [
+                "'self'",
+                'https://*.googleapis.com',
+                'https://*.firebaseapp.com',
+                'https://*.firebaseio.com',
+                'wss://*.firebaseio.com',
+                'https://www.gstatic.com',
+                'https://apis.google.com',
+                'https://www.google.com',
+                'https://identitytoolkit.googleapis.com',
+                ...firebaseCsp.connectHosts,
+            ],
             fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-            frameSrc: ["'self'", 'https://accounts.google.com', 'https://*.firebaseapp.com', 'https://www.google.com'],
+            frameSrc: [
+                "'self'",
+                'https://accounts.google.com',
+                'https://*.firebaseapp.com',
+                'https://www.google.com',
+                ...firebaseCsp.frameHosts,
+            ],
             objectSrc: ["'none'"],
             upgradeInsecureRequests: NODE_ENV === 'production' ? [] : null,
         },
@@ -116,7 +162,7 @@ function injectAdminHtml(htmlPath, req) {
         html = html.replace('</head>', `${buildEnvScript(req)}</head>`);
     }
     if (!html.includes('firebase-app-compat')) {
-        html = html.replace('</body>', `${FIREBASE_SCRIPTS}</body>`);
+        html = html.replace('</head>', `${FIREBASE_SCRIPTS}</head>`);
     }
     return html;
 }
