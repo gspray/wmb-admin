@@ -1,8 +1,9 @@
 # Issue #348 — Admin independent runtime (Phase 4 bootstrap)
 
-**Status:** Phase 4–5 on `gspray/wmb-admin` (bootstrap + Admin Desk UI)  
+**Status:** Phase 4–6 on `gspray/wmb-admin` (bootstrap + Admin Desk UI + independent deploy)  
 **Issue:** [#348](https://github.com/gspray/wmb/issues/348)  
-**Provider contract:** see `gspray/wmb` → [admin-provider-contract.md](https://github.com/gspray/wmb/blob/stage/docs/architecture/admin-provider-contract.md)
+**Provider contract:** see `gspray/wmb` → [admin-provider-contract.md](https://github.com/gspray/wmb/blob/stage/docs/architecture/admin-provider-contract.md)  
+**Deploy:** [admin-independent-runtime-deploy.md](./admin-independent-runtime-deploy.md)
 
 ## Purpose
 
@@ -64,9 +65,20 @@ Implemented:
 
 Deferred:
 
-- proxy/hostname cutover (Phase 6)
 - Pet-hosted Admin removal (Phase 7)
 - least-privilege Firebase split (Phase 8)
+
+## Phase 6 scope (deploy)
+
+Implemented:
+
+- `deploy.sh` — Admin-only remote deploy (does not restart Pet/Career PM2)
+- `scripts/deploy-server.sh` — Doppler build, PM2 restart, loopback smoke on `/admin`
+- GitHub Actions `.github/workflows/deploy.yml`
+- independent PM2 log files under `logs/pm2-admin-*.log`
+
+Proxy cutover (public `/admin` → port 3018/3019) is documented for ops; Pet still
+serves `/admin` until Phase 7.
 
 ## Verification
 

@@ -11,6 +11,9 @@
 		"test": "npm run test:admin",
 		"build:frontend": "node scripts/build-admin-frontend.mjs",
 		"test:admin": "node --test test/architecture/*.test.js test/services/*.test.js test/routes/*.test.js test/applications/*.test.js",
+		"deploy": "bash deploy.sh",
+		"deploy:admin": "bash deploy.sh",
+		"deploy:server": "bash scripts/deploy-server.sh",
 		"smoke:test": "node scripts/smoke-test.js",
 		"smoke:admin": "node scripts/smoke-test.js",
 		"lint": "node node_modules/eslint/bin/eslint.js server.js routes services middleware models scripts test eslint.config.mjs"

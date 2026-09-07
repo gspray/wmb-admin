@@ -1,0 +1,63 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Deploy profile (production or stage)'
+        required: false
+        default: ''
+        type: choice
+        options:
+          - production
+          - stage
+      dry_run:
+        description: 'Preview server checkout only'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: wmb-admin-deploy-${{ github.event_name == 'workflow_dispatch' && inputs.profile || (github.ref_name == 'stage' && 'stage' || 'production') }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy Admin (${{ github.event_name == 'workflow_dispatch' && inputs.profile || (github.ref_name == 'stage' && 'stage' || 'production') }})
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.profile || (github.ref_name == 'stage' && 'stage' || 'production') }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Resolve deploy SHA
+        id: sha
+        run: echo "value=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Configure SSH
+        run: |
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}" > "${{ runner.temp }}/deploy_key"
+          chmod 600 "${{ runner.temp }}/deploy_key"
+          ssh-keyscan -H "${{ secrets.DEPLOY_REMOTE_HOST || 'writemybook.now' }}" >> "$HOME/.ssh/known_hosts" 2>/dev/null || true
+
+      - name: Deploy Admin via deploy.sh
+        env:
+          SSH_KEY: ${{ runner.temp }}/deploy_key
+          DEPLOY_HOST: ${{ secrets.DEPLOY_REMOTE_HOST || 'writemybook.now' }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER || 'admin' }}
+          COMMIT_SHA: ${{ steps.sha.outputs.value }}
+          DEPLOY_SKIP_CLEAN_CHECK: '1'
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.profile }}" == "stage" ]] || [[ "${{ github.ref_name }}" == "stage" && "${{ github.event_name }}" != "workflow_dispatch" ]]; then
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.dry_run }}" == "true" ]]; then
+              bash deploy.sh --stage --dry-run
+            else
+              bash deploy.sh --stage
+            fi
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.dry_run }}" == "true" ]]; then
+            bash deploy.sh --dry-run
+          else
+            bash deploy.sh
+          fi

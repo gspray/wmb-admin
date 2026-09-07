@@ -44,11 +44,32 @@ npm run test:admin
 
 Deploying Admin must not restart Pet or Career.
 
+## Deploy (Admin-only)
+
+Admin deploy **does not** build Pet/Career bundles or restart `wmb-pet` / `wmb-career` PM2 apps.
+
+| Profile | Branch | Server path | PM2 app | Port |
+|---------|--------|-------------|---------|------|
+| production | `main` | `/home/admin/apps/wmb-admin` | `wmb-admin` | 3018 |
+| stage | `stage` | `/home/admin/apps/wmb-admin-stage` | `wmb-admin-stage` | 3019 |
+
+```bash
+bash deploy.sh              # production (origin/main)
+bash deploy.sh --stage      # staging (origin/stage)
+bash deploy.sh --dry-run    # preview remote checkout
+npm run smoke:admin -- --base-url http://127.0.0.1:3018
+```
+
+Canonical runtime/deploy doc: [admin-independent-runtime-deploy.md](docs/architecture/admin-independent-runtime-deploy.md)
+
+**Proxy cutover:** public `/admin` may still target Pet until ops repoints to port 3018/3019 (Phase 7 removes Pet-hosted Admin).
+
 ## Phase status
 
-- **Phase 4 (this repo):** bootstrap runtime, provider registry/client, orchestration API, placeholder `/admin` shell
-- **Phase 5:** move Admin Desk UI from Pet
-- **Phase 6:** independent deploy/proxy cutover
-- **Phase 7:** remove Admin from Pet
+- **Phase 4:** bootstrap runtime, provider registry/client, orchestration API
+- **Phase 5:** Admin Desk UI + product API proxy shims for desk parity
+- **Phase 6 (this repo):** independent PM2/deploy/smoke lifecycle
+- **Phase 7:** remove Admin from Pet after proxy cutover parity
+- **Phase 8:** least-privilege Firebase split
 
 Architecture: [docs/architecture/admin-independent-runtime.md](docs/architecture/admin-independent-runtime.md)
