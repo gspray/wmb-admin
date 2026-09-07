@@ -1,9 +1,11 @@
 'use strict';
 
-const { getDb } = require('../models/firebase');
+const { rtdbGet, rtdbUpdate } = require('../models/firebase');
+const {
+    ADMIN_PLATFORM_PRESENCE_PATH,
+    ADMIN_PLATFORM_USERS_PATH,
+} = require('./platformDatastorePaths');
 
-const PRESENCE_PATH = '_wmbServer/presence';
-const ADMIN_USERS_PATH = '_wmbServer/users';
 const DEFAULT_TTL_MS = 5 * 60 * 1000;
 const MIN_TOUCH_INTERVAL_MS = 45 * 1000;
 
@@ -27,11 +29,8 @@ function composeDisplayName({ firstName = '', lastName = '', displayName = '', n
 }
 
 async function readAdminUsersMetaMap() {
-    const db = getDb();
-    if (!db) return {};
     try {
-        const snap = await db.ref(ADMIN_USERS_PATH).once('value');
-        const raw = snap.val();
+        const raw = await rtdbGet(ADMIN_PLATFORM_USERS_PATH);
         return raw && typeof raw === 'object' ? raw : {};
     } catch (_) {
         return {};
@@ -50,9 +49,6 @@ async function touchPresence(uid, { email, name, surface } = {}) {
     if (now - last < MIN_TOUCH_INTERVAL_MS) return;
     lastTouchByUid.set(key, now);
 
-    const db = getDb();
-    if (!db) return;
-
     const patch = {
         uid: String(uid || '').trim(),
         lastSeenAt: new Date(now).toISOString(),
@@ -64,18 +60,14 @@ async function touchPresence(uid, { email, name, surface } = {}) {
     if (nameNorm) patch.name = nameNorm;
     if (surfaceNorm) patch.surface = surfaceNorm;
 
-    await db.ref(`${PRESENCE_PATH}/${key}`).update(patch);
+    await rtdbUpdate(`${ADMIN_PLATFORM_PRESENCE_PATH}/${key}`, patch);
 }
 
 async function listOnlineUsers({ ttlMs = DEFAULT_TTL_MS } = {}) {
-    const db = getDb();
-    if (!db) return [];
-
-    const [snap, metaMap] = await Promise.all([
-        db.ref(PRESENCE_PATH).once('value'),
+    const [raw, metaMap] = await Promise.all([
+        rtdbGet(ADMIN_PLATFORM_PRESENCE_PATH),
         readAdminUsersMetaMap(),
     ]);
-    const raw = snap.val();
     if (!raw || typeof raw !== 'object') return [];
 
     const cutoff = Date.now() - ttlMs;

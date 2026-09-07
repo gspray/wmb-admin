@@ -9,11 +9,15 @@
  *   FIREBASE_SERVICE_ACCOUNT  – path to the service account JSON file, relative to
  *                               the project root or absolute.
  *
- * All helpers throw if Firebase is not configured, so callers must ensure
- * Firebase is available before calling them (store.js guarantees this).
+ * All helpers throw if Firebase is not configured. Admin runtime services must
+ * route RTDB access through these helpers so platform path guards apply.
  */
 
 const admin = require('firebase-admin');
+const {
+    assertAdminPlatformReadPath,
+    assertAdminPlatformWritePath,
+} = require('../services/platformDatastorePaths');
 const path = require('path');
 const fs = require('fs');
 
@@ -117,6 +121,7 @@ function getStorageBucket() {
  * Read a value at path. Returns null if nothing exists there.
  */
 async function rtdbGet(refPath) {
+    assertAdminPlatformReadPath(refPath);
     const snap = await getDb().ref(refPath).once('value');
     return snap.val();
 }
@@ -150,6 +155,7 @@ function rtdbSanitize(value) {
  * Set (overwrite) a value at path.
  */
 async function rtdbSet(refPath, value) {
+    assertAdminPlatformWritePath(refPath);
     await getDb().ref(refPath).set(rtdbSanitize(value));
 }
 
@@ -157,6 +163,7 @@ async function rtdbSet(refPath, value) {
  * Merge/update fields at path without overwriting the whole node.
  */
 async function rtdbUpdate(refPath, updates) {
+    assertAdminPlatformWritePath(refPath);
     await getDb().ref(refPath).update(updates);
 }
 
@@ -164,6 +171,7 @@ async function rtdbUpdate(refPath, updates) {
  * Delete the node at path.
  */
 async function rtdbDelete(refPath) {
+    assertAdminPlatformWritePath(refPath);
     await getDb().ref(refPath).remove();
 }
 
@@ -172,6 +180,7 @@ async function rtdbDelete(refPath) {
  * Returns the generated key string.
  */
 async function rtdbPush(refPath, value) {
+    assertAdminPlatformWritePath(refPath);
     const ref = await getDb().ref(refPath).push(rtdbSanitize(value));
     return ref.key;
 }
@@ -192,6 +201,7 @@ function wrapRtdbTransactionUpdater(updater) {
 }
 
 async function rtdbTransaction(refPath, updater) {
+    assertAdminPlatformWritePath(refPath);
     const result = await getDb().ref(refPath).transaction(
         wrapRtdbTransactionUpdater(updater),
     );
@@ -207,6 +217,7 @@ async function rtdbTransaction(refPath, updater) {
  * handy for debugging). Returns [] if the node is empty/missing.
  */
 async function rtdbGetList(refPath) {
+    assertAdminPlatformReadPath(refPath);
     const snap = await getDb().ref(refPath).once('value');
     const val = snap.val();
     if (!val || typeof val !== 'object') return [];
@@ -218,6 +229,7 @@ async function rtdbGetList(refPath) {
  * Uses Firebase push-key ordering when no orderBy index exists.
  */
 async function rtdbGetListLimited(refPath, limit = 80) {
+    assertAdminPlatformReadPath(refPath);
     const cap = Math.max(1, Number(limit) || 80);
     const snap = await getDb().ref(refPath).limitToLast(cap).once('value');
     const val = snap.val();

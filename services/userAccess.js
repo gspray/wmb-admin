@@ -1,10 +1,9 @@
 'use strict';
 
-const { getDb } = require('../models/firebase');
+const { rtdbGet } = require('../models/firebase');
 const { normalizeProductId } = require('./productIds');
+const { ADMIN_PLATFORM_USERS_PATH } = require('./platformDatastorePaths');
 
-const USERS_PATH = '_wmbServer/users';
-const SECURITY_AUDIT_PATH = '_wmbServer/securityAudit';
 const ACCESS_ROLES = new Set(['author', 'admin', 'system']);
 const ADMIN_LEVEL_ROLES = new Set(['admin', 'system']);
 
@@ -47,10 +46,7 @@ async function getUserAccess(uid) {
         return { uid: key, role: 'admin', source: 'local-development' };
     }
 
-    const db = getDb();
-    if (!db) return null;
-    const snap = await db.ref(`${USERS_PATH}/${key}`).once('value');
-    const record = snap.val();
+    const record = await rtdbGet(`${ADMIN_PLATFORM_USERS_PATH}/${key}`);
     if (!record || typeof record !== 'object') return null;
     const role = normalizeRole(record.role);
     if (!role) return null;
@@ -69,7 +65,7 @@ async function getUserAccess(uid) {
 module.exports = {
     ACCESS_ROLES,
     ADMIN_LEVEL_ROLES,
-    USERS_PATH,
+    USERS_PATH: ADMIN_PLATFORM_USERS_PATH,
     getUserAccess,
     isAdminLevelRole,
     normalizeAdminProductIds,

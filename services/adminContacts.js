@@ -1,9 +1,13 @@
 'use strict';
 
-const { getDb } = require('../models/firebase');
+const { rtdbGet } = require('../models/firebase');
 const { getUserAccess, isAdminLevelRole } = require('./userAccess');
+const {
+    ADMIN_PLATFORM_USERS_PATH,
+    ADMIN_PLATFORM_LEGACY_EMAILS_PATH,
+    ADMIN_PLATFORM_LEGACY_PHONES_PATH,
+} = require('./platformDatastorePaths');
 
-const ADMIN_CONTACTS_PATH = '_wmbServer';
 const CACHE_TTL_MS = 30 * 1000;
 
 let cached = null;
@@ -75,19 +79,25 @@ function normalizeContacts(raw) {
     };
 }
 
+async function loadAdminContactsFromFirebase() {
+    const [usersRaw, legacyEmails, legacyPhones] = await Promise.all([
+        rtdbGet(ADMIN_PLATFORM_USERS_PATH),
+        rtdbGet(ADMIN_PLATFORM_LEGACY_EMAILS_PATH),
+        rtdbGet(ADMIN_PLATFORM_LEGACY_PHONES_PATH),
+    ]);
+    return normalizeContacts({
+        users: usersRaw || {},
+        emails: legacyEmails,
+        phones: legacyPhones,
+    });
+}
+
 async function getAdminContacts() {
     const now = Date.now();
     if (cached && (now - cachedAt) < CACHE_TTL_MS) return cached;
 
     try {
-        const db = getDb();
-        if (!db) {
-            cached = fromEnv();
-            cachedAt = now;
-            return cached;
-        }
-        const snap = await db.ref(ADMIN_CONTACTS_PATH).once('value');
-        const contacts = normalizeContacts(snap.val());
+        const contacts = await loadAdminContactsFromFirebase();
         const hasFirebaseContacts = contacts.uids.length > 0 || contacts.emails.length > 0 || contacts.phones.length > 0;
         cached = hasFirebaseContacts ? contacts : fromEnv();
         cachedAt = now;
@@ -112,7 +122,7 @@ function clearAdminContactsCache() {
 }
 
 module.exports = {
-    ADMIN_CONTACTS_PATH,
+    ADMIN_PLATFORM_USERS_PATH,
     normalizeEmail,
     normalizePhone,
     getAdminContacts,
