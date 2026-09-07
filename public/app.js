@@ -1148,7 +1148,7 @@ function currentAdminReturnHref() {
 }
 
 function buildAdminLoginUrl(returnHref) {
-    const login = `${BASE}/book/login`;
+    const login = `${BASE}/admin/login`;
     const resolved = resolveAdminLoginReturnPath(returnHref) || resolveAdminLoginReturnPath(currentAdminReturnHref());
     if (!resolved) return login;
     try {
