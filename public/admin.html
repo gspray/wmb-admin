@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Book Platform Admin</title>
+  <link rel="stylesheet" href="/admin-bootstrap.css" />
+  <!--WMB_ENV-->
+</head>
+<body>
+  <main class="admin-bootstrap">
+    <header>
+      <h1>Book Platform Admin</h1>
+      <p class="subtitle">Standalone bootstrap — Issue #348 Phase 4</p>
+    </header>
+    <section id="status-panel">
+      <p id="boot-status">Loading provider registry…</p>
+    </section>
+    <section id="providers-panel" hidden>
+      <h2>Configured product providers</h2>
+      <ul id="providers-list"></ul>
+    </section>
+    <section id="projects-panel" hidden>
+      <h2>Authorized projects</h2>
+      <p id="projects-summary"></p>
+      <ul id="projects-list"></ul>
+    </section>
+    <footer>
+      <p>Phase 5 moves the full Admin Desk UI here. Pet and Career customer apps remain external.</p>
+    </footer>
+  </main>
+  <!--WMB_FIREBASE-->
+  <script src="/admin-bootstrap.js"></script>
+</body>
+</html>
