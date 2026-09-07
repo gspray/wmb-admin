@@ -60,7 +60,7 @@ function providerForProductId(rawProductId) {
 function listAuthorizedProviders(access) {
     const providers = listProviders().filter((row) => row.providerBaseUrl);
     if (!access) return [];
-    if (access.crossProduct === true) return providers;
+    if (access.crossProduct === true || access.legacy === true) return providers;
     const allowed = new Set(Array.isArray(access.adminProductIds) ? access.adminProductIds : []);
     return providers.filter((provider) => allowed.has(provider.id));
 }

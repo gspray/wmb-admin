@@ -2,7 +2,7 @@
 
 const express = require('express');
 const productProviderClient = require('../services/productProviderClient');
-const { bearerToken } = require('../services/productBackendProxy');
+const { bearerToken, providerForwardHeaders } = require('../services/productBackendProxy');
 const {
     listAuthorizedProviders,
     providerForProductId,
@@ -38,10 +38,16 @@ function unwrapProject(payload) {
 router.get('/', async (req, res) => {
     try {
         const token = bearerToken(req);
+        const forwardHeaders = providerForwardHeaders(req);
         const providers = listAuthorizedProviders(req.adminAccess);
         const chunks = await Promise.all(providers.map(async (provider) => {
             try {
-                const payload = await productProviderClient.listProjects(provider, token, req.query);
+                const payload = await productProviderClient.listProjects(
+                    provider,
+                    token,
+                    req.query,
+                    forwardHeaders,
+                );
                 return {
                     items: (payload?.items || []).map((item) => ({
                         ...item,
@@ -93,10 +99,16 @@ router.get('/', async (req, res) => {
 
 async function providerForProjectRoute(req, res, projectId) {
     const token = bearerToken(req);
+    const forwardHeaders = providerForwardHeaders(req);
     const providers = listAuthorizedProviders(req.adminAccess);
     for (const provider of providers) {
         try {
-            const payload = await productProviderClient.getProject(provider, token, projectId);
+            const payload = await productProviderClient.getProject(
+                provider,
+                token,
+                projectId,
+                forwardHeaders,
+            );
             return { provider, payload };
         } catch (err) {
             if (err.status !== 404 && err.status !== 403) throw err;
@@ -130,6 +142,8 @@ router.post('/', async (req, res) => {
             'POST',
             '/projects',
             req.body,
+            {},
+            providerForwardHeaders(req),
         );
         res.status(201).json(unwrapProject(payload));
     } catch (err) {
@@ -147,6 +161,8 @@ router.put('/:id', async (req, res) => {
             'PUT',
             `/projects/${encodeURIComponent(req.params.id)}`,
             req.body,
+            {},
+            providerForwardHeaders(req),
         );
         res.json(unwrapProject(payload));
     } catch (err) {
@@ -164,6 +180,8 @@ router.post('/:id/duplicate', async (req, res) => {
             'POST',
             `/projects/${encodeURIComponent(req.params.id)}/duplicate`,
             req.body,
+            {},
+            providerForwardHeaders(req),
         );
         res.status(201).json(unwrapProject(payload));
     } catch (err) {
@@ -180,6 +198,9 @@ router.delete('/:id', async (req, res) => {
             bearerToken(req),
             'DELETE',
             `/projects/${encodeURIComponent(req.params.id)}`,
+            undefined,
+            {},
+            providerForwardHeaders(req),
         );
         res.status(204).end();
     } catch (err) {

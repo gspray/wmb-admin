@@ -32,6 +32,16 @@ function bearerToken(req) {
     return header.startsWith('Bearer ') ? header.slice(7) : null;
 }
 
+/** Forward local dev / pinned project headers to product provider APIs. */
+function providerForwardHeaders(req) {
+    const headers = {};
+    const authorProjectId = String(req.headers['x-author-project-id'] || '').trim();
+    const devProjectId = String(req.headers['x-dev-project-id'] || '').trim();
+    if (authorProjectId) headers['X-Author-Project-Id'] = authorProjectId;
+    if (devProjectId) headers['X-Dev-Project-Id'] = devProjectId;
+    return headers;
+}
+
 function forwardHeaders(req, authToken, { includeJsonContentType = true } = {}) {
     const headers = {
         Accept: req.headers.accept || 'application/json',
@@ -254,6 +264,7 @@ async function forwardAuthorShim(req, res) {
 
 module.exports = {
     bearerToken,
+    providerForwardHeaders,
     forwardToProductApi,
     forwardAuthorShim,
     resolveTargetProductId,

@@ -64,8 +64,8 @@ async function providerRequest(provider, authToken, method, pathSuffix, body, qu
     return res.text();
 }
 
-async function listProjects(provider, authToken, query = {}) {
-    return providerRequest(provider, authToken, 'GET', '/projects', undefined, query);
+async function listProjects(provider, authToken, query = {}, extraHeaders = {}) {
+    return providerRequest(provider, authToken, 'GET', '/projects', undefined, query, extraHeaders);
 }
 
 async function getProject(provider, authToken, projectId, extraHeaders = {}) {

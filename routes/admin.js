@@ -11,6 +11,7 @@ const {
     providerForProductId,
 } = require('../services/productProviderRegistry');
 const productProviderClient = require('../services/productProviderClient');
+const { providerForwardHeaders } = require('../services/productBackendProxy');
 const { ADMIN_PRODUCT_ID } = require('../services/productIds');
 
 const router = express.Router();
@@ -71,6 +72,7 @@ router.get('/providers', (req, res) => {
 
 router.get('/projects', async (req, res) => {
     const token = bearerToken(req);
+    const forwardHeaders = providerForwardHeaders(req);
     const providers = listAuthorizedProviders(req.adminAccess);
     const query = {
         page: req.query.page,
@@ -82,7 +84,12 @@ router.get('/projects', async (req, res) => {
 
     const chunks = await Promise.all(providers.map(async (provider) => {
         try {
-            const payload = await productProviderClient.listProjects(provider, token, query);
+            const payload = await productProviderClient.listProjects(
+                provider,
+                token,
+                query,
+                forwardHeaders,
+            );
             const items = Array.isArray(payload?.items) ? payload.items : [];
             return {
                 providerId: provider.id,
@@ -111,6 +118,7 @@ router.get('/projects', async (req, res) => {
 
 router.get('/projects/:projectId', async (req, res) => {
     const token = bearerToken(req);
+    const forwardHeaders = providerForwardHeaders(req);
     const projectId = String(req.params.projectId || '').trim();
     const requestedProductId = String(req.query.productId || '').trim();
     const providers = requestedProductId
@@ -121,7 +129,12 @@ router.get('/projects/:projectId', async (req, res) => {
         if (!provider) continue;
         if (!(await hasDeskProductAccess(requestIdentity(req), provider.id))) continue;
         try {
-            const payload = await productProviderClient.getProject(provider, token, projectId);
+            const payload = await productProviderClient.getProject(
+                provider,
+                token,
+                projectId,
+                forwardHeaders,
+            );
             return res.json({
                 ...payload,
                 productId: provider.id,

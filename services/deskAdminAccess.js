@@ -36,7 +36,7 @@ async function hasDeskProductAccess(identity, productId) {
     if (!product || product === ADMIN_PRODUCT_ID) return false;
     const access = await resolveDeskAdminAccess(identity);
     if (!access) return false;
-    return access.crossProduct === true || access.adminProductIds.includes(product);
+    return access.crossProduct === true || access.legacy === true || access.adminProductIds.includes(product);
 }
 
 module.exports = {
