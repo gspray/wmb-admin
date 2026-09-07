@@ -10406,6 +10406,11 @@ select.desk-users-role.desk-users-field-tight {
     color: var(--c-subtle);
     padding: .1rem .15rem;
     border-radius: 4px;
+    min-width: 1.35rem;
+    min-height: 1.35rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 .qe-drag-handle:hover {
     color: var(--c-primary);

@@ -21,6 +21,43 @@ const BASE_PATH = (() => {
 const API = `${BASE_PATH}/api`;
 const publicDir = path.join(__dirname, 'public');
 const applicationsDir = path.join(__dirname, 'applications');
+const faDir = path.join(__dirname, 'node_modules/@fortawesome/fontawesome-free');
+
+/** Font Awesome Kit (Pro). Override with FONTAWESOME_KIT_URL; set to `off` for CSS-only. */
+const FA_KIT_SCRIPT = 'https://kit.fontawesome.com/3a26ade3db.js';
+
+function resolveFaKitScriptSrc() {
+    const raw = (process.env.FONTAWESOME_KIT_URL || '').trim();
+    if (/^(off|none|false|0)$/i.test(raw)) return '';
+    if (raw) return raw;
+    return FA_KIT_SCRIPT;
+}
+
+function resolveFaStylesheetHref() {
+    const raw = (process.env.FONTAWESOME_CSS_URL || '').trim();
+    if (/^bundled$/i.test(raw) || /^local$/i.test(raw)) {
+        return `${BASE_PATH}/fa/css/all.min.css`;
+    }
+    if (raw) return raw;
+    return `${BASE_PATH}/fa/css/all.min.css`;
+}
+
+function buildFaStylesheetLink() {
+    const href = resolveFaStylesheetHref();
+    const isRemote = /^https?:\/\//i.test(href);
+    const extra = isRemote ? ' crossorigin="anonymous" referrerpolicy="no-referrer"' : '';
+    return `<link rel="stylesheet" href="${href}"${extra} />`;
+}
+
+function buildFaHeadTags() {
+    const kitSrc = resolveFaKitScriptSrc();
+    const stylesheet = buildFaStylesheetLink();
+    if (kitSrc) {
+        const safe = String(kitSrc).replace(/"/g, '&quot;');
+        return `${stylesheet}<script src="${safe}" crossorigin="anonymous" data-auto-replace-svg="false"></script>`;
+    }
+    return stylesheet;
+}
 
 function firebaseCspHostsFromEnv() {
     const connectHosts = new Set();
@@ -60,9 +97,9 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", 'https://www.gstatic.com', 'https://apis.google.com', 'https://www.google.com'],
+            scriptSrc: ["'self'", "'unsafe-inline'", 'https://www.gstatic.com', 'https://apis.google.com', 'https://www.google.com', 'https://kit.fontawesome.com'],
             scriptSrcAttr: ["'unsafe-inline'"],
-            styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+            styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdnjs.cloudflare.com', 'https://ka-f.fontawesome.com', 'https://ka-p.fontawesome.com'],
             imgSrc: ["'self'", 'data:', 'blob:', 'https://lh3.googleusercontent.com'],
             connectSrc: [
                 "'self'",
@@ -74,9 +111,12 @@ app.use(helmet({
                 'https://apis.google.com',
                 'https://www.google.com',
                 'https://identitytoolkit.googleapis.com',
+                'https://kit.fontawesome.com',
+                'https://ka-f.fontawesome.com',
+                'https://ka-p.fontawesome.com',
                 ...firebaseCsp.connectHosts,
             ],
-            fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+            fontSrc: ["'self'", 'https://fonts.gstatic.com', 'https://cdnjs.cloudflare.com', 'https://ka-f.fontawesome.com', 'https://ka-p.fontawesome.com'],
             frameSrc: [
                 "'self'",
                 'https://accounts.google.com',
@@ -164,6 +204,9 @@ function injectAdminHtml(htmlPath, req) {
     if (!html.includes('firebase-app-compat')) {
         html = html.replace('</head>', `${FIREBASE_SCRIPTS}</head>`);
     }
+    if (!html.includes('/fa/css/all.min.css') && !html.includes('kit.fontawesome.com')) {
+        html = html.replace('</head>', `${buildFaHeadTags()}</head>`);
+    }
     return html;
 }
 
@@ -197,6 +240,10 @@ app.get(['/admin/login', '/admin/login.html'], (req, res) => {
 });
 app.get('/', (_req, res) => res.redirect(`${BASE_PATH}/admin`.replace(/\/{2,}/g, '/') || '/admin'));
 
+if (BASE_PATH) {
+    app.use(`${BASE_PATH}/fa`, express.static(faDir));
+}
+app.use('/fa', express.static(faDir));
 app.use(BASE_PATH || '/', express.static(publicDir, { index: false }));
 app.use('/applications', express.static(applicationsDir, { index: false }));
 
@@ -210,4 +257,12 @@ if (require.main === module) {
     });
 }
 
-module.exports = { app, server, PORT, BASE_PATH, API };
+module.exports = {
+    app,
+    server,
+    PORT,
+    BASE_PATH,
+    API,
+    buildFaHeadTags,
+    injectAdminHtml,
+};
