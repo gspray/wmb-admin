@@ -142,6 +142,7 @@ const systemProxyRouter = require('./routes/systemProxy');
 const { resolveBuildVersion, isDevHttpEnvironment } = require('./services/buildVersion');
 const { resolveDatabaseEnvironment } = require('./services/databaseEnvironment');
 const { listProviders } = require('./services/productProviderRegistry');
+const { resolveProductApiBaseUrl } = require('./services/productBackendRegistry');
 const pkg = require('./package.json');
 
 const FIREBASE_CONFIG = {
@@ -176,6 +177,7 @@ function buildEnvScript(req) {
             bookTypes: [...provider.bookTypes],
             customerRoute: provider.customerRoute,
             providerBaseUrl: provider.providerBaseUrl,
+            publicBaseUrl: resolveProductApiBaseUrl(provider.id),
         })),
     })};</script>`;
 }

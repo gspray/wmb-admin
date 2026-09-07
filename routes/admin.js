@@ -5,11 +5,8 @@ const {
     resolveDeskAdminAccess,
     hasDeskProductAccess,
 } = require('../services/deskAdminAccess');
-const {
-    listProviders,
-    listAuthorizedProviders,
-    providerForProductId,
-} = require('../services/productProviderRegistry');
+const { listProviders, listAuthorizedProviders, providerForProductId } = require('../services/productProviderRegistry');
+const { resolveProductApiBaseUrl } = require('../services/productBackendRegistry');
 const productProviderClient = require('../services/productProviderClient');
 const { providerForwardHeaders } = require('../services/productBackendProxy');
 const { ADMIN_PRODUCT_ID } = require('../services/productIds');
@@ -45,6 +42,7 @@ router.get('/boot', (req, res) => {
         bookTypes: [...provider.bookTypes],
         customerRoute: provider.customerRoute,
         providerBaseUrl: provider.providerBaseUrl,
+        publicBaseUrl: resolveProductApiBaseUrl(provider.id),
     }));
     res.json({
         productId: ADMIN_PRODUCT_ID,
@@ -66,6 +64,7 @@ router.get('/providers', (req, res) => {
             bookTypes: [...provider.bookTypes],
             customerRoute: provider.customerRoute,
             providerBaseUrl: provider.providerBaseUrl,
+            publicBaseUrl: resolveProductApiBaseUrl(provider.id),
         })),
     });
 });

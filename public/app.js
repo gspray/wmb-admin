@@ -113,11 +113,24 @@ function authorProductRouteForBookType(bookType) {
     return '/book';
 }
 
+function customerPublicBaseUrlForBookType(bookType) {
+    const route = authorProductRouteForBookType(bookType);
+    const productId = route === '/pet' ? 'write_my_pet_book' : 'write_my_book';
+    const products = window.__WMB__?.customerProducts;
+    if (!Array.isArray(products)) return '';
+    const row = products.find((entry) => entry?.id === productId);
+    return String(row?.publicBaseUrl || '').trim().replace(/\/+$/, '');
+}
+
 function buildProjectPreviewUrl(project) {
-    const route = authorProductRouteForBookType(project?.bookType || project?.workType);
+    const bookType = project?.bookType || project?.workType;
+    const route = authorProductRouteForBookType(bookType);
     const id = String(project?.id || '').trim();
-    // Token stays in sessionStorage — never put admin_token in the URL.
-    return `${BASE}${route}/preview/${encodeURIComponent(id)}`;
+    const publicBase = customerPublicBaseUrlForBookType(bookType);
+    const path = `${route}/preview/${encodeURIComponent(id)}`;
+    // Open the customer app (Pet/Career), not Admin's own origin.
+    if (publicBase) return `${publicBase}${path}`;
+    return `${BASE}${path}`;
 }
 
 async function getToken() {
