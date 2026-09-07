@@ -70,9 +70,19 @@ function readDevProjectParam() {
     }
 }
 
+function readRouteProjectParam() {
+    try {
+        return String(new URL(window.location.href).searchParams.get('project') || '').trim();
+    } catch (_) {
+        return '';
+    }
+}
+
 async function resolveLocalDevProjectId() {
     const fromQuery = readDevProjectParam();
     if (fromQuery && fromQuery !== 'auto') return fromQuery;
+    const fromProject = readRouteProjectParam();
+    if (fromProject) return fromProject;
     const stored = String(localStorage.getItem(WMB_AUTHOR_PROJECT_KEY) || '').trim();
     if (stored) return stored;
     if (!isLocalDevHost()) return '';

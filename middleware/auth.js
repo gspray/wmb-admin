@@ -8,6 +8,18 @@ async function requireAuth(req, res, next) {
     if (req.path === '/auth' || req.path.startsWith('/auth/')) return next();
     if (req.path === '/public' || req.path.startsWith('/public/')) return next();
 
+    if (isLocalDevRequest(req)) {
+        const devProjectId = String(req.headers['x-dev-project-id'] || '').trim();
+        if (devProjectId) {
+            req.auth = {
+                uid: 'dev',
+                email: process.env.ADMIN_EMAILS?.split(',')[0]?.trim() || 'dev@localhost',
+                name: 'Dev',
+            };
+            return next();
+        }
+    }
+
     if (isLocalDevRequest(req) && req.headers['x-dev-admin'] === '1') {
         req.auth = {
             uid: 'dev',
