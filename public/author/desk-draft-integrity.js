@@ -30,6 +30,26 @@ function formatAiVerdict(value) {
     return '—';
 }
 
+function formatNature(value) {
+    const nature = cleanText(value).toLowerCase();
+    if (nature === 'verbatim_repeat') return 'Verbatim repeat';
+    if (nature === 'paraphrased_repeat') return 'Paraphrased repeat';
+    if (nature === 'thematic_callback') return 'Thematic callback';
+    if (nature === 'plan_mismatch') return 'Plan mismatch';
+    if (nature === 'uncertain') return 'Uncertain';
+    return '—';
+}
+
+function formatRecommendedAction(value) {
+    const action = cleanText(value).toLowerCase();
+    if (action === 'keep') return 'Keep';
+    if (action === 'trim_to_callback') return 'Trim to callback';
+    if (action === 'consolidate_in_home_chapter') return 'Consolidate in home chapter';
+    if (action === 'move_allocation') return 'Move allocation';
+    if (action === 'review_manually') return 'Review manually';
+    return '—';
+}
+
 function materialIdsForFinding(finding) {
     return [...new Set([
         finding?.materialId,
@@ -48,16 +68,8 @@ function materialTopic(finding, materialById) {
 
 function aiItemForFinding(finding, aiItems = []) {
     const materialId = cleanText(finding?.materialId);
-    const chapters = formatChapters(finding?.chapters);
-    return (aiItems || []).find((item) => {
-        if (materialId && cleanText(item?.materialId) === materialId) return true;
-        const itemChapters = formatChapters(item?.chapters);
-        return materialId && itemChapters === chapters && cleanText(item?.kind) === cleanText(finding?.kind);
-    }) || null;
-}
-
-function reviewedByLabel(hasAiVerdict) {
-    return hasAiVerdict ? 'AI' : 'Heuristic';
+    if (!materialId) return null;
+    return (aiItems || []).find((item) => cleanText(item?.materialId) === materialId) || null;
 }
 
 export function buildIntegrityMaterialIndex(rows = []) {
@@ -99,7 +111,7 @@ export function buildIntegrityTableRows(report = null, materialById = new Map())
     for (const group of groups) {
         for (const finding of findings[group.key] || []) {
             const aiItem = aiItemForFinding(finding, aiItems);
-            const aiVerdict = aiItem?.verdict || '';
+            const hasAi = Boolean(aiItem?.verdict);
             rows.push({
                 category: group.label,
                 topic: materialTopic(finding, materialById),
@@ -108,8 +120,10 @@ export function buildIntegrityTableRows(report = null, materialById = new Map())
                     : (Number.isFinite(Number(finding?.chapterNumber)) ? Number(finding.chapterNumber) : null),
                 detectedIn: formatChapters(finding?.chapters),
                 heuristic: cleanText(finding?.severity) || 'review',
-                ai: formatAiVerdict(aiVerdict),
-                reviewedBy: reviewedByLabel(Boolean(aiVerdict)),
+                reviewedBy: hasAi ? 'AI' : 'Heuristic',
+                ai: hasAi ? formatAiVerdict(aiItem.verdict) : '—',
+                nature: hasAi ? formatNature(aiItem.nature) : '—',
+                suggestedAction: hasAi ? formatRecommendedAction(aiItem.recommendedAction) : '—',
                 sortRank: severityRank(finding?.severity),
             });
         }
@@ -134,6 +148,14 @@ function renderSummaryLine(summary) {
             `AI: ${Number(aiCounts.realIssue) || 0} real`,
             `${Number(aiCounts.falsePositive) || 0} false positive`,
         );
+    }
+    const actionCounts = summary.aiEvaluation?.actionCounts;
+    if (actionCounts) {
+        const actionParts = [];
+        if (actionCounts.trimToCallback) actionParts.push(`${actionCounts.trimToCallback} trim`);
+        if (actionCounts.moveAllocation) actionParts.push(`${actionCounts.moveAllocation} reallocate`);
+        if (actionCounts.keep) actionParts.push(`${actionCounts.keep} keep`);
+        if (actionParts.length) parts.push(`Actions: ${actionParts.join(', ')}`);
     }
     return parts.join(' · ');
 }
@@ -169,8 +191,10 @@ function renderReport(esc, report, materialById = new Map()) {
             <td>${esc(row.plannedChapter == null ? '—' : String(row.plannedChapter))}</td>
             <td>${esc(row.detectedIn)}</td>
             <td>${esc(row.heuristic)}</td>
-            <td>${esc(row.ai)}</td>
             <td>${esc(row.reviewedBy)}</td>
+            <td>${esc(row.ai)}</td>
+            <td>${esc(row.nature)}</td>
+            <td>${esc(row.suggestedAction)}</td>
         </tr>
     `).join('');
 
@@ -186,8 +210,10 @@ function renderReport(esc, report, materialById = new Map()) {
                             <th scope="col">Planned ch</th>
                             <th scope="col">Detected in</th>
                             <th scope="col">Heuristic</th>
-                            <th scope="col">AI</th>
                             <th scope="col">Reviewed by</th>
+                            <th scope="col">AI</th>
+                            <th scope="col">Nature</th>
+                            <th scope="col">Suggested action</th>
                         </tr>
                     </thead>
                     <tbody>${body}</tbody>
