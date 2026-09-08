@@ -66,6 +66,54 @@ function materialTopic(finding, materialById) {
     return cleanText(finding?.summary || finding?.kind || 'Finding');
 }
 
+function inferGuidanceFromVerdict(verdict) {
+    const normalized = cleanText(verdict).toLowerCase();
+    if (normalized === 'false_positive') {
+        return { nature: 'thematic_callback', recommendedAction: 'keep' };
+    }
+    if (normalized === 'real_issue') {
+        return { nature: 'verbatim_repeat', recommendedAction: 'trim_to_callback' };
+    }
+    return { nature: 'uncertain', recommendedAction: 'review_manually' };
+}
+
+function inferGuidanceFromDisposition(disposition) {
+    const normalized = cleanText(disposition).toLowerCase();
+    if (normalized === 'legitimate_callback') {
+        return { nature: 'thematic_callback', recommendedAction: 'keep' };
+    }
+    if (normalized === 'plan_mismatch') {
+        return { nature: 'plan_mismatch', recommendedAction: 'move_allocation' };
+    }
+    if (normalized === 'accidental_repetition') {
+        return { nature: 'verbatim_repeat', recommendedAction: 'trim_to_callback' };
+    }
+    return { nature: 'uncertain', recommendedAction: 'review_manually' };
+}
+
+export function resolveIntegrityGuidance(finding, aiItem) {
+    const nature = cleanText(aiItem?.nature || finding?.aiReview?.nature);
+    const recommendedAction = cleanText(aiItem?.recommendedAction || finding?.aiReview?.recommendedAction);
+    if (nature && recommendedAction) {
+        return { nature, recommendedAction };
+    }
+    if (finding?.aiReview?.disposition) {
+        const inferred = inferGuidanceFromDisposition(finding.aiReview.disposition);
+        return {
+            nature: nature || inferred.nature,
+            recommendedAction: recommendedAction || inferred.recommendedAction,
+        };
+    }
+    if (aiItem?.verdict) {
+        const inferred = inferGuidanceFromVerdict(aiItem.verdict);
+        return {
+            nature: nature || inferred.nature,
+            recommendedAction: recommendedAction || inferred.recommendedAction,
+        };
+    }
+    return { nature: '', recommendedAction: '' };
+}
+
 function aiItemForFinding(finding, aiItems = []) {
     const materialId = cleanText(finding?.materialId);
     if (!materialId) return null;
@@ -111,7 +159,8 @@ export function buildIntegrityTableRows(report = null, materialById = new Map())
     for (const group of groups) {
         for (const finding of findings[group.key] || []) {
             const aiItem = aiItemForFinding(finding, aiItems);
-            const hasAi = Boolean(aiItem?.verdict);
+            const hasAi = Boolean(aiItem?.verdict || finding?.aiReview);
+            const guidance = resolveIntegrityGuidance(finding, aiItem);
             rows.push({
                 category: group.label,
                 topic: materialTopic(finding, materialById),
@@ -121,9 +170,9 @@ export function buildIntegrityTableRows(report = null, materialById = new Map())
                 detectedIn: formatChapters(finding?.chapters),
                 heuristic: cleanText(finding?.severity) || 'review',
                 reviewedBy: hasAi ? 'AI' : 'Heuristic',
-                ai: hasAi ? formatAiVerdict(aiItem.verdict) : '—',
-                nature: hasAi ? formatNature(aiItem.nature) : '—',
-                suggestedAction: hasAi ? formatRecommendedAction(aiItem.recommendedAction) : '—',
+                ai: aiItem?.verdict ? formatAiVerdict(aiItem.verdict) : '—',
+                nature: hasAi ? formatNature(guidance.nature) : '—',
+                suggestedAction: hasAi ? formatRecommendedAction(guidance.recommendedAction) : '—',
                 sortRank: severityRank(finding?.severity),
             });
         }
