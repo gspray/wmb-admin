@@ -101,6 +101,15 @@ export function summarizeIntegrityReport(report = null) {
     const summary = report?.summary || {};
     const scorecard = report?.scorecard || {};
     const findings = report?.findings || {};
+    const findingCounts = FINDING_GROUPS.reduce((acc, group) => {
+        acc[group.key] = Array.isArray(findings[group.key]) ? findings[group.key].length : 0;
+        return acc;
+    }, {});
+    const totalFindings = findingCounts.duplication
+        + findingCounts.unsupported
+        + findingCounts.missedMaterial
+        + findingCounts.warnings;
+    const aiEvaluation = report?.aiEvaluation || null;
     return {
         exists: Boolean(report?.auditedAt || report?.updatedAt),
         auditedAt: report?.auditedAt || report?.updatedAt || '',
@@ -114,15 +123,15 @@ export function summarizeIntegrityReport(report = null) {
         highCount: Number(summary.highCount) || 0,
         mediumCount: Number(summary.mediumCount) || 0,
         reviewCount: Number(summary.reviewCount) || 0,
+        totalFindings,
         duplication: cleanText(scorecard.duplication) || '—',
         grounding: cleanText(scorecard.grounding) || '—',
         coverage: cleanText(scorecard.coverage) || '—',
         allocationCompliance: cleanText(scorecard.allocationCompliance) || '—',
-        findingCounts: FINDING_GROUPS.reduce((acc, group) => {
-            acc[group.key] = Array.isArray(findings[group.key]) ? findings[group.key].length : 0;
-            return acc;
-        }, {}),
+        findingCounts,
         stages: Array.isArray(report?.stages) ? report.stages.slice() : [],
+        aiEvaluation,
+        aiVerdictCounts: aiEvaluation?.counts || null,
     };
 }
 
@@ -140,6 +149,43 @@ export function flattenIntegrityFindings(report = null) {
     }
     rows.sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
     return rows;
+}
+
+function renderAiEvaluation(esc, report) {
+    const ai = report?.aiEvaluation;
+    if (!ai?.headline) return '';
+
+    const items = Array.isArray(ai.items) ? ai.items : [];
+    const counts = ai.counts || {};
+    const body = items.length
+        ? items.map((item) => `
+            <article class="desk-integrity-finding desk-integrity-finding--ai">
+                <div class="desk-integrity-finding-head">
+                    <span class="audit-sev audit-sev--review">${esc(String(item.verdict || 'uncertain').replace(/_/g, ' ').toUpperCase())}</span>
+                    <strong>${esc(item.kind || item.category || 'finding')}</strong>
+                </div>
+                <p class="desk-integrity-finding-summary">${esc(item.rationale || '—')}</p>
+                <dl class="desk-integrity-finding-meta">
+                    <div><dt>Chapter</dt><dd>${esc(Number.isFinite(Number(item.chapterNumber)) ? `Ch ${item.chapterNumber}` : '—')}</dd></div>
+                    ${item.materialId ? `<div><dt>Material</dt><dd><code>${esc(item.materialId)}</code></dd></div>` : ''}
+                </dl>
+            </article>
+        `).join('')
+        : '<div class="audit-empty">No per-flag AI verdicts returned.</div>';
+
+    return `
+        <section class="audit-section desk-integrity-section desk-integrity-ai">
+            <h3>AI review</h3>
+            <p class="desk-integrity-ai-headline"><strong>${esc(ai.headline)}</strong></p>
+            ${ai.summary ? `<p class="desk-integrity-ai-summary">${esc(ai.summary)}</p>` : ''}
+            <div class="desk-integrity-ai-counts">
+                Real issue: ${esc(String(counts.realIssue ?? 0))}
+                · False positive: ${esc(String(counts.falsePositive ?? 0))}
+                · Uncertain: ${esc(String(counts.uncertain ?? 0))}
+            </div>
+            <div class="desk-integrity-findings">${body}</div>
+        </section>
+    `;
 }
 
 function renderScorecard(esc, report) {
@@ -160,7 +206,7 @@ function renderScorecard(esc, report) {
             `).join('')}
             <div class="desk-integrity-scorecard-item">
                 <span class="desk-integrity-scorecard-label">Findings</span>
-                <strong>${esc(`${summary.highCount} high · ${summary.mediumCount} medium`)}</strong>
+                <strong>${esc(`${summary.highCount} high · ${summary.mediumCount} medium · ${summary.reviewCount} review`)}</strong>
             </div>
         </div>
     `;
@@ -235,7 +281,7 @@ function renderReport(esc, report, materialById = new Map()) {
                     <div><strong>${esc(summary.highCount)}</strong><span>High</span></div>
                     <div><strong>${esc(summary.mediumCount)}</strong><span>Medium</span></div>
                     <div><strong>${esc(summary.reviewCount)}</strong><span>Review</span></div>
-                    <div><strong>${esc(summary.findingCounts.duplication + summary.findingCounts.unsupported + summary.findingCounts.missedMaterial)}</strong><span>Total</span></div>
+                    <div><strong>${esc(summary.totalFindings)}</strong><span>Total</span></div>
                 </div>
             </div>
             <div class="audit-meta-line">
@@ -244,6 +290,7 @@ function renderReport(esc, report, materialById = new Map()) {
                 · Stages: ${esc((summary.stages || []).join(', ') || 'deterministic')}
             </div>
             ${renderScorecard(esc, report)}
+            ${renderAiEvaluation(esc, report)}
             ${renderFindingSection(esc, 'Duplication', findings.duplication || [], materialById)}
             ${renderFindingSection(esc, 'Unsupported / invented detail', findings.unsupported || [], materialById)}
             ${renderFindingSection(esc, 'Missed Material', findings.missedMaterial || [], materialById)}
@@ -287,11 +334,15 @@ export async function launchDraftIntegrityPanel(opts) {
             </header>
             <div class="desk-workspace-body desk-integrity-body">
                 <div class="desk-integrity-toolbar">
-                    <div>
+                    <div class="desk-integrity-toolbar-actions">
                         <button class="btn btn-primary" id="desk-integrity-run" type="button">Run integrity audit</button>
                         <button class="btn btn-ghost" id="desk-integrity-reload" type="button">Reload saved</button>
+                        <label class="desk-integrity-ai-toggle">
+                            <input id="desk-integrity-use-ai" type="checkbox">
+                            Include AI review
+                        </label>
                     </div>
-                    <p class="desk-integrity-hint">Deterministic pass only — fast, no LLM. Uses chapter reconciliation and book allocation.</p>
+                    <p class="desk-integrity-hint">Runs the same Final Draft Integrity service as the CLI. Re-run after backend updates — saved audits are not auto-refreshed.</p>
                 </div>
                 <div id="desk-integrity-status" class="desk-workspace-status" aria-live="polite"></div>
                 <div id="desk-integrity-content" class="desk-integrity-content">
@@ -308,6 +359,7 @@ export async function launchDraftIntegrityPanel(opts) {
     const contentEl = emptyEl.querySelector('#desk-integrity-content');
     const runBtn = emptyEl.querySelector('#desk-integrity-run');
     const reloadBtn = emptyEl.querySelector('#desk-integrity-reload');
+    const useAiInput = emptyEl.querySelector('#desk-integrity-use-ai');
     const closeBtn = emptyEl.querySelector('#desk-integrity-close');
 
     let currentReport = null;
@@ -334,6 +386,22 @@ export async function launchDraftIntegrityPanel(opts) {
         return materialById;
     }
 
+    function formatStatusSummary(summary) {
+        if (!summary.auditable) {
+            return `Audit not ready · ${summary.draftedChapterCount} drafted chapters · ${summary.materialCount} Material answers`;
+        }
+        const parts = [
+            `${summary.totalFindings} total`,
+            `${summary.highCount} high`,
+            `${summary.mediumCount} medium`,
+            `${summary.reviewCount} review`,
+        ];
+        if (summary.aiEvaluation?.headline) {
+            parts.push('AI review attached');
+        }
+        return parts.join(' · ');
+    }
+
     async function loadSavedReport() {
         setStatus('Loading saved audit…');
         const response = await api('GET', '/api/system/author/project/final-draft-integrity');
@@ -346,9 +414,7 @@ export async function launchDraftIntegrityPanel(opts) {
         currentReport = response.report;
         const summary = summarizeIntegrityReport(currentReport);
         setStatus(
-            summary.auditable
-                ? `Saved audit from ${formatWhen(summary.auditedAt)} · ${summary.highCount} high findings`
-                : `Saved audit not ready · ${summary.draftedChapterCount} drafted chapters · ${summary.materialCount} Material answers`,
+            `Saved audit from ${formatWhen(summary.auditedAt)} · ${formatStatusSummary(summary)}`,
             summary.auditable && summary.highCount > 0 ? 'warn' : (summary.auditable ? 'ok' : 'warn'),
         );
         renderCurrentReport();
@@ -357,26 +423,25 @@ export async function launchDraftIntegrityPanel(opts) {
 
     async function runAudit() {
         if (runBtn) runBtn.disabled = true;
+        const useAi = Boolean(useAiInput?.checked);
         if (contentEl) {
             contentEl.innerHTML = `
                 <div class="audit-loading">
                     <div class="spinner" style="margin:0 auto .7rem;"></div>
-                    <p>Running integrity audit…</p>
+                    <p>Running integrity audit${useAi ? ' with AI review' : ''}…</p>
                 </div>
             `;
         }
-        setStatus('Running integrity audit…');
+        setStatus(`Running integrity audit${useAi ? ' with AI review' : ''}…`);
         try {
             const report = await api('POST', '/api/system/author/project/final-draft-integrity', {
-                useAi: false,
+                useAi,
                 persist: true,
             });
             currentReport = report;
             const summary = summarizeIntegrityReport(report);
             setStatus(
-                summary.auditable
-                    ? `Audit complete · ${summary.highCount} high, ${summary.mediumCount} medium`
-                    : `Audit not ready · ${summary.draftedChapterCount} drafted chapters · ${summary.materialCount} Material answers`,
+                `Audit complete · ${formatStatusSummary(summary)}`,
                 summary.auditable && summary.highCount > 0 ? 'warn' : (summary.auditable ? 'ok' : 'warn'),
             );
             renderCurrentReport();
