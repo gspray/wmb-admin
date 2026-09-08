@@ -2,13 +2,6 @@
 
 import { formatUiDateTime } from '../../platform/client/ui/datetime-format.js';
 
-const FINDING_GROUPS = [
-    { key: 'duplication', label: 'Duplication' },
-    { key: 'unsupported', label: 'Unsupported / invented detail' },
-    { key: 'missedMaterial', label: 'Missed Material' },
-    { key: 'warnings', label: 'Warnings' },
-];
-
 function cleanText(value) {
     return String(value || '').replace(/\s+/g, ' ').trim();
 }
@@ -18,39 +11,53 @@ function severityRank(value) {
     return order[String(value || '').toLowerCase()] ?? 0;
 }
 
-function severityClass(value) {
-    const v = String(value || '').toLowerCase();
-    if (v === 'high') return 'audit-sev--high';
-    if (v === 'medium') return 'audit-sev--medium';
-    if (v === 'review') return 'audit-sev--review';
-    return 'audit-sev--low';
-}
-
 function formatWhen(value) {
     return formatUiDateTime(value) || '—';
 }
 
-function chapterLabel(finding) {
-    const chapters = Array.isArray(finding?.chapters)
-        ? finding.chapters.filter((n) => Number.isFinite(Number(n)))
-        : [];
-    if (chapters.length) return chapters.map((n) => `Ch ${n}`).join(', ');
-    if (Number.isFinite(Number(finding?.chapterNumber))) return `Ch ${finding.chapterNumber}`;
-    if (Number.isFinite(Number(finding?.allocatedChapter))) return `Allocated Ch ${finding.allocatedChapter}`;
+function formatChapters(chapters) {
+    const nums = (Array.isArray(chapters) ? chapters : [])
+        .map((n) => Number(n))
+        .filter((n) => Number.isFinite(n));
+    return nums.length ? nums.join(', ') : '—';
+}
+
+function formatAiVerdict(value) {
+    const verdict = cleanText(value).toLowerCase();
+    if (verdict === 'real_issue') return 'Real issue';
+    if (verdict === 'false_positive') return 'False positive';
+    if (verdict === 'uncertain') return 'Uncertain';
     return '—';
 }
 
-function idRefs(finding) {
-    const parts = [];
-    if (finding?.episodeId) parts.push(`Episode ${finding.episodeId}`);
-    if (finding?.draftRevisionKey) parts.push(`Draft ${finding.draftRevisionKey}`);
-    return parts.length ? parts.join(' · ') : '—';
+function materialIdsForFinding(finding) {
+    return [...new Set([
+        finding?.materialId,
+        ...(Array.isArray(finding?.materialIds) ? finding.materialIds : []),
+    ].map(cleanText).filter(Boolean))];
 }
 
-function excerpt(value, maxChars = 500) {
-    const text = cleanText(value);
-    if (text.length <= maxChars) return text;
-    return `${text.slice(0, maxChars).trim()}…`;
+function materialTopic(finding, materialById) {
+    for (const id of materialIdsForFinding(finding)) {
+        const row = materialById?.get(id);
+        const label = cleanText(row?.title || row?.questionText);
+        if (label) return label;
+    }
+    return cleanText(finding?.summary || finding?.kind || 'Finding');
+}
+
+function aiItemForFinding(finding, aiItems = []) {
+    const materialId = cleanText(finding?.materialId);
+    const chapters = formatChapters(finding?.chapters);
+    return (aiItems || []).find((item) => {
+        if (materialId && cleanText(item?.materialId) === materialId) return true;
+        const itemChapters = formatChapters(item?.chapters);
+        return materialId && itemChapters === chapters && cleanText(item?.kind) === cleanText(finding?.kind);
+    }) || null;
+}
+
+function reviewedByLabel(hasAiVerdict) {
+    return hasAiVerdict ? 'AI' : 'Heuristic';
 }
 
 export function buildIntegrityMaterialIndex(rows = []) {
@@ -61,240 +68,132 @@ export function buildIntegrityMaterialIndex(rows = []) {
     );
 }
 
-function materialIdsForFinding(finding) {
-    return [...new Set([
-        finding?.materialId,
-        ...(Array.isArray(finding?.materialIds) ? finding.materialIds : []),
-    ].map(cleanText).filter(Boolean))];
-}
-
-function renderMaterialContext(esc, finding, materialById) {
-    const ids = materialIdsForFinding(finding);
-    if (!ids.length) return '';
-    return ids.map((id) => {
-        const row = materialById?.get(id);
-        if (!row) {
-            return `<div class="desk-integrity-material"><span>Material content unavailable</span><code>${esc(id)}</code></div>`;
-        }
-        const label = cleanText(row.title || row.questionText) || 'Material';
-        const answer = excerpt(row.answerText);
-        return `
-            <div class="desk-integrity-material">
-                <strong>${esc(label)}</strong>
-                ${answer ? `<p>${esc(answer)}</p>` : '<p>No saved content.</p>'}
-            </div>
-        `;
-    }).join('');
-}
-
-function displayFindingSummary(finding, materialById) {
-    let summary = cleanText(finding?.summary || finding?.claim || '');
-    for (const id of materialIdsForFinding(finding)) {
-        const row = materialById?.get(id);
-        const label = cleanText(row?.title || row?.questionText);
-        if (label) summary = summary.replaceAll(id, `"${label}"`);
-    }
-    return summary;
-}
-
 export function summarizeIntegrityReport(report = null) {
     const summary = report?.summary || {};
-    const scorecard = report?.scorecard || {};
-    const findings = report?.findings || {};
-    const findingCounts = FINDING_GROUPS.reduce((acc, group) => {
-        acc[group.key] = Array.isArray(findings[group.key]) ? findings[group.key].length : 0;
-        return acc;
-    }, {});
-    const totalFindings = findingCounts.duplication
-        + findingCounts.unsupported
-        + findingCounts.missedMaterial
-        + findingCounts.warnings;
     const aiEvaluation = report?.aiEvaluation || null;
     return {
         exists: Boolean(report?.auditedAt || report?.updatedAt),
         auditedAt: report?.auditedAt || report?.updatedAt || '',
-        manuscriptRevision: cleanText(report?.manuscriptRevision),
         auditable: report?.readiness?.auditable !== false,
-        readinessStatus: cleanText(report?.readiness?.status) || 'unknown',
         draftedChapterCount: Number(report?.readiness?.draftedChapterCount) || 0,
-        reconciliationSnapshotCount: Number(report?.readiness?.reconciliationSnapshotCount) || 0,
-        allocationEntryCount: Number(report?.readiness?.allocationEntryCount) || 0,
         materialCount: Number(report?.readiness?.materialCount) || 0,
         highCount: Number(summary.highCount) || 0,
         mediumCount: Number(summary.mediumCount) || 0,
         reviewCount: Number(summary.reviewCount) || 0,
-        totalFindings,
-        duplication: cleanText(scorecard.duplication) || '—',
-        grounding: cleanText(scorecard.grounding) || '—',
-        coverage: cleanText(scorecard.coverage) || '—',
-        allocationCompliance: cleanText(scorecard.allocationCompliance) || '—',
-        findingCounts,
-        stages: Array.isArray(report?.stages) ? report.stages.slice() : [],
         aiEvaluation,
         aiVerdictCounts: aiEvaluation?.counts || null,
     };
 }
 
-export function flattenIntegrityFindings(report = null) {
+export function buildIntegrityTableRows(report = null, materialById = new Map()) {
     const findings = report?.findings || {};
+    const aiItems = report?.aiEvaluation?.items || [];
+    const groups = [
+        { key: 'duplication', label: 'Duplication' },
+        { key: 'unsupported', label: 'Unsupported detail' },
+        { key: 'missedMaterial', label: 'Missed Material' },
+        { key: 'warnings', label: 'Warning' },
+    ];
     const rows = [];
-    for (const group of FINDING_GROUPS) {
-        for (const item of findings[group.key] || []) {
+
+    for (const group of groups) {
+        for (const finding of findings[group.key] || []) {
+            const aiItem = aiItemForFinding(finding, aiItems);
+            const aiVerdict = aiItem?.verdict || '';
             rows.push({
-                ...item,
-                group: group.key,
-                groupLabel: group.label,
+                category: group.label,
+                topic: materialTopic(finding, materialById),
+                plannedChapter: Number.isFinite(Number(finding?.allocatedChapter))
+                    ? Number(finding.allocatedChapter)
+                    : (Number.isFinite(Number(finding?.chapterNumber)) ? Number(finding.chapterNumber) : null),
+                detectedIn: formatChapters(finding?.chapters),
+                heuristic: cleanText(finding?.severity) || 'review',
+                ai: formatAiVerdict(aiVerdict),
+                reviewedBy: reviewedByLabel(Boolean(aiVerdict)),
+                sortRank: severityRank(finding?.severity),
             });
         }
     }
-    rows.sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
+
+    rows.sort((a, b) => b.sortRank - a.sortRank);
     return rows;
 }
 
-function renderAiEvaluation(esc, report) {
-    const ai = report?.aiEvaluation;
-    if (!ai?.headline) return '';
-
-    const items = Array.isArray(ai.items) ? ai.items : [];
-    const counts = ai.counts || {};
-    const body = items.length
-        ? items.map((item) => `
-            <article class="desk-integrity-finding desk-integrity-finding--ai">
-                <div class="desk-integrity-finding-head">
-                    <span class="audit-sev audit-sev--review">${esc(String(item.verdict || 'uncertain').replace(/_/g, ' ').toUpperCase())}</span>
-                    <strong>${esc(item.kind || item.category || 'finding')}</strong>
-                </div>
-                <p class="desk-integrity-finding-summary">${esc(item.rationale || '—')}</p>
-                <dl class="desk-integrity-finding-meta">
-                    <div><dt>Chapter</dt><dd>${esc(Number.isFinite(Number(item.chapterNumber)) ? `Ch ${item.chapterNumber}` : '—')}</dd></div>
-                    ${item.materialId ? `<div><dt>Material</dt><dd><code>${esc(item.materialId)}</code></dd></div>` : ''}
-                </dl>
-            </article>
-        `).join('')
-        : '<div class="audit-empty">No per-flag AI verdicts returned.</div>';
-
-    return `
-        <section class="audit-section desk-integrity-section desk-integrity-ai">
-            <h3>AI review</h3>
-            <p class="desk-integrity-ai-headline"><strong>${esc(ai.headline)}</strong></p>
-            ${ai.summary ? `<p class="desk-integrity-ai-summary">${esc(ai.summary)}</p>` : ''}
-            <div class="desk-integrity-ai-counts">
-                Real issue: ${esc(String(counts.realIssue ?? 0))}
-                · False positive: ${esc(String(counts.falsePositive ?? 0))}
-                · Uncertain: ${esc(String(counts.uncertain ?? 0))}
-            </div>
-            <div class="desk-integrity-findings">${body}</div>
-        </section>
-    `;
-}
-
-function renderScorecard(esc, report) {
-    const summary = summarizeIntegrityReport(report);
-    const badges = [
-        ['Duplication', summary.duplication],
-        ['Grounding', summary.grounding],
-        ['Coverage', summary.coverage],
-        ['Allocation', summary.allocationCompliance],
-    ];
-    return `
-        <div class="desk-integrity-scorecard">
-            ${badges.map(([label, value]) => `
-                <div class="desk-integrity-scorecard-item">
-                    <span class="desk-integrity-scorecard-label">${esc(label)}</span>
-                    <strong>${esc(value)}</strong>
-                </div>
-            `).join('')}
-            <div class="desk-integrity-scorecard-item">
-                <span class="desk-integrity-scorecard-label">Findings</span>
-                <strong>${esc(`${summary.highCount} high · ${summary.mediumCount} medium · ${summary.reviewCount} review`)}</strong>
-            </div>
-        </div>
-    `;
-}
-
-function renderFindingSection(esc, title, rows, materialById) {
-    if (!rows.length) {
-        return `
-            <section class="audit-section desk-integrity-section">
-                <h3>${esc(title)}</h3>
-                <div class="audit-empty">No findings in this section.</div>
-            </section>
-        `;
+function renderSummaryLine(summary) {
+    if (!summary.auditable) {
+        return `${summary.draftedChapterCount} drafted chapters · ${summary.materialCount} Material answers`;
     }
-
-    const body = rows.map((row) => `
-        <article class="desk-integrity-finding">
-            <div class="desk-integrity-finding-head">
-                <span class="audit-sev ${severityClass(row.severity)}">${esc(String(row.severity || 'review').toUpperCase())}</span>
-                <strong>${esc(row.kind || row.signal || 'finding')}</strong>
-            </div>
-            <p class="desk-integrity-finding-summary">${esc(displayFindingSummary(row, materialById))}</p>
-            ${renderMaterialContext(esc, row, materialById)}
-            <dl class="desk-integrity-finding-meta">
-                <div><dt>Chapters</dt><dd>${esc(chapterLabel(row))}</dd></div>
-                ${idRefs(row) !== '—' ? `<div><dt>References</dt><dd>${esc(idRefs(row))}</dd></div>` : ''}
-                ${row.disposition ? `<div><dt>Disposition</dt><dd>${esc(row.disposition)}</dd></div>` : ''}
-                ${row.signal ? `<div><dt>Signal</dt><dd>${esc(row.signal)}</dd></div>` : ''}
-            </dl>
-        </article>
-    `).join('');
-
-    return `
-        <section class="audit-section desk-integrity-section">
-            <h3>${esc(title)}</h3>
-            <div class="desk-integrity-findings">${body}</div>
-        </section>
-    `;
+    const parts = [
+        `${summary.highCount} high`,
+        `${summary.mediumCount} medium`,
+        `${summary.reviewCount} review`,
+    ];
+    const aiCounts = summary.aiVerdictCounts;
+    if (aiCounts) {
+        parts.push(
+            `AI: ${Number(aiCounts.realIssue) || 0} real`,
+            `${Number(aiCounts.falsePositive) || 0} false positive`,
+        );
+    }
+    return parts.join(' · ');
 }
 
 function renderReadinessBanner(esc, report) {
     const readiness = report?.readiness || {};
     if (readiness.auditable !== false) return '';
-    const drafted = Number(readiness.draftedChapterCount) || 0;
-    const material = Number(readiness.materialCount) || 0;
-    const allocation = Number(readiness.allocationEntryCount) || 0;
     return `
-        <div class="audit-banner audit-banner--blocked desk-integrity-readiness" role="status">
-            <strong>Audit not ready.</strong>
-            This book does not yet have enough draft pipeline state for a meaningful integrity pass.
-            Drafted chapters: ${esc(String(drafted))}.
-            Material answers: ${esc(String(material))}.
-            Allocation entries: ${esc(String(allocation))}.
-            Finish Book Plan, allocation, and chapter drafting before treating a clean scorecard as proof of quality.
-        </div>
+        <p class="desk-integrity-note" role="status">
+            This book is not ready for a full integrity check yet. Finish drafting and book allocation first.
+        </p>
     `;
 }
 
 function renderReport(esc, report, materialById = new Map()) {
     const summary = summarizeIntegrityReport(report);
-    const findings = report?.findings || {};
+    const rows = buildIntegrityTableRows(report, materialById);
+
+    if (!rows.length) {
+        return `
+            <div class="desk-integrity-report">
+                ${renderReadinessBanner(esc, report)}
+                <p class="desk-integrity-empty">No issues found.</p>
+                <p class="desk-integrity-summary">${esc(renderSummaryLine(summary))}</p>
+            </div>
+        `;
+    }
+
+    const body = rows.map((row, index) => `
+        <tr>
+            <td>${esc(String(index + 1))}</td>
+            <td>${esc(row.topic)}</td>
+            <td>${esc(row.plannedChapter == null ? '—' : String(row.plannedChapter))}</td>
+            <td>${esc(row.detectedIn)}</td>
+            <td>${esc(row.heuristic)}</td>
+            <td>${esc(row.ai)}</td>
+            <td>${esc(row.reviewedBy)}</td>
+        </tr>
+    `).join('');
+
     return `
         <div class="desk-integrity-report">
             ${renderReadinessBanner(esc, report)}
-            <div class="audit-hero desk-integrity-hero">
-                <div>
-                    <p class="audit-eyebrow">Pipeline integrity</p>
-                    <h2>Draft Integrity Report</h2>
-                    <p class="audit-sub">Deterministic audit of duplication, unsupported detail, and missed Material using allocation and reconciliation metadata.</p>
-                </div>
-                <div class="audit-hero-meta">
-                    <div><strong>${esc(summary.highCount)}</strong><span>High</span></div>
-                    <div><strong>${esc(summary.mediumCount)}</strong><span>Medium</span></div>
-                    <div><strong>${esc(summary.reviewCount)}</strong><span>Review</span></div>
-                    <div><strong>${esc(summary.totalFindings)}</strong><span>Total</span></div>
-                </div>
+            <div class="desk-integrity-table-wrap">
+                <table class="desk-integrity-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">#</th>
+                            <th scope="col">Material (topic)</th>
+                            <th scope="col">Planned ch</th>
+                            <th scope="col">Detected in</th>
+                            <th scope="col">Heuristic</th>
+                            <th scope="col">AI</th>
+                            <th scope="col">Reviewed by</th>
+                        </tr>
+                    </thead>
+                    <tbody>${body}</tbody>
+                </table>
             </div>
-            <div class="audit-meta-line">
-                Audited: ${esc(formatWhen(summary.auditedAt))}
-                · Revision: ${esc(summary.manuscriptRevision || '—')}
-                · Stages: ${esc((summary.stages || []).join(', ') || 'deterministic')}
-            </div>
-            ${renderScorecard(esc, report)}
-            ${renderAiEvaluation(esc, report)}
-            ${renderFindingSection(esc, 'Duplication', findings.duplication || [], materialById)}
-            ${renderFindingSection(esc, 'Unsupported / invented detail', findings.unsupported || [], materialById)}
-            ${renderFindingSection(esc, 'Missed Material', findings.missedMaterial || [], materialById)}
-            ${renderFindingSection(esc, 'Warnings', findings.warnings || [], materialById)}
+            <p class="desk-integrity-summary">${esc(renderSummaryLine(summary))}</p>
         </div>
     `;
 }
@@ -334,21 +233,17 @@ export async function launchDraftIntegrityPanel(opts) {
             </header>
             <div class="desk-workspace-body desk-integrity-body">
                 <div class="desk-integrity-toolbar">
-                    <div class="desk-integrity-toolbar-actions">
-                        <button class="btn btn-primary" id="desk-integrity-run" type="button">Run integrity audit</button>
-                        <button class="btn btn-ghost" id="desk-integrity-reload" type="button">Reload saved</button>
-                        <label class="desk-integrity-ai-toggle">
-                            <input id="desk-integrity-use-ai" type="checkbox">
-                            Include AI review
-                        </label>
-                    </div>
-                    <p class="desk-integrity-hint">Runs the same Final Draft Integrity service as the CLI. Re-run after backend updates — saved audits are not auto-refreshed.</p>
+                    <button class="btn btn-primary" id="desk-integrity-run" type="button">Run integrity audit</button>
+                    <label class="desk-integrity-ai-toggle">
+                        <input id="desk-integrity-use-ai" type="checkbox" checked>
+                        Include AI review
+                    </label>
                 </div>
                 <div id="desk-integrity-status" class="desk-workspace-status" aria-live="polite"></div>
                 <div id="desk-integrity-content" class="desk-integrity-content">
                     <div class="audit-loading">
                         <div class="spinner" style="margin:0 auto .7rem;"></div>
-                        <p>Loading saved integrity audit…</p>
+                        <p>Loading…</p>
                     </div>
                 </div>
             </div>
@@ -358,7 +253,6 @@ export async function launchDraftIntegrityPanel(opts) {
     const statusEl = emptyEl.querySelector('#desk-integrity-status');
     const contentEl = emptyEl.querySelector('#desk-integrity-content');
     const runBtn = emptyEl.querySelector('#desk-integrity-run');
-    const reloadBtn = emptyEl.querySelector('#desk-integrity-reload');
     const useAiInput = emptyEl.querySelector('#desk-integrity-use-ai');
     const closeBtn = emptyEl.querySelector('#desk-integrity-close');
 
@@ -374,7 +268,7 @@ export async function launchDraftIntegrityPanel(opts) {
     function renderCurrentReport() {
         if (!contentEl) return;
         if (!currentReport) {
-            contentEl.innerHTML = '<div class="audit-empty">No integrity audit yet. Run one to check duplication, grounding, and missed Material.</div>';
+            contentEl.innerHTML = '<p class="desk-integrity-empty">No integrity audit yet. Run one to check this draft.</p>';
             return;
         }
         contentEl.innerHTML = renderReport(esc, currentReport, materialById);
@@ -386,37 +280,18 @@ export async function launchDraftIntegrityPanel(opts) {
         return materialById;
     }
 
-    function formatStatusSummary(summary) {
-        if (!summary.auditable) {
-            return `Audit not ready · ${summary.draftedChapterCount} drafted chapters · ${summary.materialCount} Material answers`;
-        }
-        const parts = [
-            `${summary.totalFindings} total`,
-            `${summary.highCount} high`,
-            `${summary.mediumCount} medium`,
-            `${summary.reviewCount} review`,
-        ];
-        if (summary.aiEvaluation?.headline) {
-            parts.push('AI review attached');
-        }
-        return parts.join(' · ');
-    }
-
     async function loadSavedReport() {
-        setStatus('Loading saved audit…');
+        setStatus('Loading…');
         const response = await api('GET', '/api/system/author/project/final-draft-integrity');
         if (!response || response.exists !== true || !response.report) {
             currentReport = null;
-            setStatus('No saved integrity audit yet.');
+            setStatus('');
             renderCurrentReport();
             return null;
         }
         currentReport = response.report;
         const summary = summarizeIntegrityReport(currentReport);
-        setStatus(
-            `Saved audit from ${formatWhen(summary.auditedAt)} · ${formatStatusSummary(summary)}`,
-            summary.auditable && summary.highCount > 0 ? 'warn' : (summary.auditable ? 'ok' : 'warn'),
-        );
+        setStatus(summary.auditedAt ? `Last checked ${formatWhen(summary.auditedAt)}` : '');
         renderCurrentReport();
         return currentReport;
     }
@@ -428,11 +303,11 @@ export async function launchDraftIntegrityPanel(opts) {
             contentEl.innerHTML = `
                 <div class="audit-loading">
                     <div class="spinner" style="margin:0 auto .7rem;"></div>
-                    <p>Running integrity audit${useAi ? ' with AI review' : ''}…</p>
+                    <p>Running integrity audit…</p>
                 </div>
             `;
         }
-        setStatus(`Running integrity audit${useAi ? ' with AI review' : ''}…`);
+        setStatus('Running integrity audit…');
         try {
             const report = await api('POST', '/api/system/author/project/final-draft-integrity', {
                 useAi,
@@ -440,10 +315,7 @@ export async function launchDraftIntegrityPanel(opts) {
             });
             currentReport = report;
             const summary = summarizeIntegrityReport(report);
-            setStatus(
-                `Audit complete · ${formatStatusSummary(summary)}`,
-                summary.auditable && summary.highCount > 0 ? 'warn' : (summary.auditable ? 'ok' : 'warn'),
-            );
+            setStatus(summary.auditedAt ? `Last checked ${formatWhen(summary.auditedAt)}` : '');
             renderCurrentReport();
         } finally {
             if (runBtn) runBtn.disabled = false;
@@ -451,9 +323,6 @@ export async function launchDraftIntegrityPanel(opts) {
     }
 
     closeBtn?.addEventListener('click', onClose);
-    reloadBtn?.addEventListener('click', () => {
-        loadSavedReport().catch((err) => setStatus(err?.message || 'Could not reload audit', 'error'));
-    });
     runBtn?.addEventListener('click', () => {
         runAudit().catch((err) => setStatus(err?.message || 'Integrity audit failed', 'error'));
     });
@@ -464,7 +333,7 @@ export async function launchDraftIntegrityPanel(opts) {
     await loadSavedReport().catch((err) => {
         setStatus(err?.message || 'Could not load saved audit', 'error');
         if (contentEl) {
-            contentEl.innerHTML = '<div class="audit-empty">Could not load saved integrity audit.</div>';
+            contentEl.innerHTML = '<p class="desk-integrity-empty">Could not load integrity audit.</p>';
         }
     });
 }
